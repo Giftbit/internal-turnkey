@@ -1,0 +1,30 @@
+# see https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md
+
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: Example project
+
+Parameters:
+  LightrailDomain:
+    Type: String
+    Description: The domain of the Lightrail REST API
+    AllowedPattern: (\w+\.)\w{3}
+
+Resources:
+  GiftcardPurchaseFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../dist/giftcardPurchase/giftcardPurchase.zip
+      Handler: index.handler
+      Runtime: nodejs6.10
+      MemorySize: 128
+      Timeout: 30 # seconds, 300 max
+      Environment:
+        Variables:
+          LIGHTRAIL_DOMAIN: !Ref LightrailDomain
+      Events:
+        RestApi:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY

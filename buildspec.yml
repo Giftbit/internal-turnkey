@@ -1,0 +1,31 @@
+version: 0.1
+phases:
+  install:
+    commands:
+      - echo Build enviromment `uname -a` `aws --version 2>&1` node/`node --version` npm/`npm --version`
+      - mkdir -p  ~/.aws/
+      - mkdir -p  ~/.ssh/
+      # Fetch temporary credentials to the S3 bucket with assume-role and put them in a profile.
+      # Use sed to do string manipulation because we're in sh, not bash.
+      # $CI_KEY_ACCESS_ROLE and $CI_KEY_BUCKET are defined in ci.yaml
+      - ASSUME_RESULT=`aws sts assume-role --role-arn "$CI_KEY_ACCESS_ROLE" --role-session-name s3-access --query '[Credentials.AccessKeyId,Credentials.SecretAccessKey,Credentials.SessionToken]' --output text` && echo "[profile s3-access]\naws_access_key_id=`echo $ASSUME_RESULT | sed -e 's/ .*//'`\naws_secret_access_key=`echo $ASSUME_RESULT | sed -e 's/^[^ ]* //g' | sed -e 's/ .*//'`\naws_session_token=`echo $ASSUME_RESULT | sed -e 's/^[^ ]* [^ ]* //g'`\n" >> ~/.aws/config
+      - aws configure set s3.signature_version s3v4 --profile s3-access
+      - aws s3 sync s3://$CI_KEY_BUCKET/.ssh ~/.ssh --profile s3-access
+      - chmod 600 ~/.ssh/*
+      - npm install
+  pre_build:
+    commands:
+  build:
+    commands:
+      - npm run build
+  post_build:
+    commands:
+      # env var BUILD_ARTIFACT_BUCKET is defined in ci.yaml
+      - aws cloudformation package
+         --template-file infrastructure/sam.yaml
+         --s3-bucket $BUILD_ARTIFACT_BUCKET
+         --output-template-file SamDeploymentTemplate.yaml
+artifacts:
+  type: zip
+  files:
+    - SamDeploymentTemplate.yaml
