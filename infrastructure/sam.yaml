@@ -2,13 +2,26 @@
 
 AWSTemplateFormatVersion: 2010-09-09
 Transform: AWS::Serverless-2016-10-31
-Description: Example project
+Description: Supports turnkey widgets
 
 Parameters:
   LightrailDomain:
     Type: String
     Description: The domain of the Lightrail REST API
-    AllowedPattern: (\w+\.)\w{3}
+    AllowedPattern: (\w+\.)+\w{3}
+  SecureConfigBucket:
+    Type: String
+    Description: Name of the S3 bucket holding the JWT secure config
+  SecureConfigKeyJwt:
+    Type: String
+    Description: Key of the JWT secure config object in S3
+  SecureConfigKeyRoleDefinitions:
+    Type: String
+    Description: Key of the role definitions secure config object in S3
+  SecureConfigKmsArn:
+    Type: String
+    Description: Optional ARN of the KMS encrypting the S3 bucket
+    AllowedPattern: arn:aws:kms:[a-zA-Z_0-9\-]+:\d{12}:key/[a-zA-Z_0-9+=,.@\-_/]+
 
 Resources:
   GiftcardPurchaseFunction:
@@ -23,10 +36,10 @@ Resources:
         Variables:
           LIGHTRAIL_DOMAIN: !Ref LightrailDomain
       Events:
-        RestApi:
+        PurchaseGiftcard:
           Type: Api
           Properties:
-            Path: /{proxy+}
+            Path: /v1/turnkey/purchaseGiftcard
             Method: ANY
 
   StripeFunction:
@@ -41,8 +54,8 @@ Resources:
         Variables:
           LIGHTRAIL_DOMAIN: !Ref LightrailDomain
       Events:
-        RestApi:
+        Rest:
           Type: Api
           Properties:
-            Path: /{proxy+}
+            Path: /v1/turnkey/{+proxy}
             Method: ANY
