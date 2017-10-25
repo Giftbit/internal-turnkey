@@ -10,7 +10,8 @@ export async function fetchStripeCredentials(authorizationCode: string): Promise
             client_secret: stripeClientId,
             code: authorizationCode,
             grant_type: "authorization_code"
-        });
+        })
+        .ok(() => true);
 
     if (resp.ok) {
         const stripeAuthResponse: StripeAuthResponse = resp.body;
