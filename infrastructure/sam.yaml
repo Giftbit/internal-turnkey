@@ -35,6 +35,9 @@ Resources:
       Environment:
         Variables:
           LIGHTRAIL_DOMAIN: !Ref LightrailDomain
+          SECURE_CONFIG_BUCKET: !Ref SecureConfigBucket
+          SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
+          SECURE_CONFIG_KEY_ROLE_DEFINITIONS: !Ref SecureConfigKeyRoleDefinitions
       Events:
         PurchaseGiftcard:
           Type: Api
@@ -52,10 +55,12 @@ Resources:
       Timeout: 30 # seconds, 300 max
       Environment:
         Variables:
-          LIGHTRAIL_DOMAIN: !Ref LightrailDomain
+          SECURE_CONFIG_BUCKET: !Ref SecureConfigBucket
+          SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
+          SECURE_CONFIG_KEY_ROLE_DEFINITIONS: !Ref SecureConfigKeyRoleDefinitions
       Events:
         Rest:
           Type: Api
           Properties:
-            Path: /v1/turnkey/{+proxy}
+            Path: /v1/turnkey/{proxy+}
             Method: ANY
