@@ -52,7 +52,12 @@ if [ "$COMMAND" = "build" ]; then
     npm run build -- $BUILD_ARGS
 
 elif [ "$COMMAND" = "delete" ]; then
-    aws cloudformation delete-stack --stack-name $STACK_NAME
+    read -r -p "Are you sure you want to delete this stack? [y/N] " response
+    case "$response" in
+        [yY][eE][sS]|[yY])
+            aws cloudformation delete-stack --stack-name $STACK_NAME
+            ;;
+    esac
 
 elif [ "$COMMAND" = "deploy" ]; then
     # Deploy all code and update the CloudFormation stack.
