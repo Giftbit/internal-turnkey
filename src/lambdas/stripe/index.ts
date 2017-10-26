@@ -11,19 +11,11 @@ router.route(new giftbitRoutes.HealthCheckRoute("/v1/turnkey/healthCheck"));
 router.route("/v1/turnkey/stripecallback")
     .method("GET")
     .handler(async evt => {
-        const scope = evt.queryStringParameters["scope"];
-        const authorizationCode = evt.queryStringParameters["code"];
+        evt.requireQueryStringParameter("scope", ["read_write"]);
+        evt.requireQueryStringParameter("state");
+        evt.requireQueryStringParameter("code");
 
-        if (scope !== "read_write") {
-            console.error("Bad call to stripecallback: expected query parameter scope to equal 'read_write'.", evt.queryStringParameters);
-            throw new cassava.RestError(cassava.httpStatusCode.clientError.BAD_REQUEST);
-        }
-        if (!authorizationCode) {
-            console.error("Bad call to stripecallback: expected query parameter code.", evt.queryStringParameters);
-            throw new cassava.RestError(cassava.httpStatusCode.clientError.BAD_REQUEST);
-        }
-
-        const creds = await stripeAccess.fetchStripeCredentials(authorizationCode);
+        const creds = await stripeAccess.fetchStripeCredentials(evt.queryStringParameters["code"]);
 
         return {
             body: {
@@ -35,6 +27,24 @@ router.route("/v1/turnkey/stripecallback")
 const authConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_JWT");
 const roleDefinitionsPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS");
 router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise));
+
+router.route("/v1/turnkey/stripeconnect")
+    .method("GET")
+    .handler(async evt => {
+        const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
+        auth.requireIds("giftbitUserId");
+
+        // TODO check if already connected
+        // TODO build state out of giftbitUserId and a secure token
+
+        return {
+            statusCode: 302,
+            body: null,
+            headers: {
+                Location: `https://connect.stripe.com/oauth/authorize?response_type=code&scope=read_write&client_id=${encodeURIComponent(stripeAccess.stripeClientId)}&state=${encodeURIComponent(auth.giftbitUserId)}`
+            }
+        };
+    });
 
 router.route("/v1/turnkey/stripe")
     .method("GET")

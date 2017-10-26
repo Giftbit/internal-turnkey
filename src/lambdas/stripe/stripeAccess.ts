@@ -1,13 +1,15 @@
 import * as superagent from "superagent";
 import {StripeAuthResponse} from "./StripeAuthResponse";
 import {StripeAuthErrorResponse} from "./StripeAuthErrorResponse";
+import {httpStatusCode, RestError} from "cassava";
 
-const stripeClientId: string = "ca_BeEfEZCpfrRFtHK3olpVsvWR8CcuwX1q";  // TODO store and fetch, don't hard code
+export const stripeClientId: string = "ca_BeEfEZCpfrRFtHK3olpVsvWR8CcuwX1q";  // TODO store and fetch, don't hard code
+const stripeApiKey: string = "sk_test_Febdx6DaFUrKUNBT0zGTivZp";
 
 export async function fetchStripeCredentials(authorizationCode: string): Promise<StripeAuthResponse> {
     const resp = await superagent.post("https://connect.stripe.com/oauth/token")
         .query({
-            client_secret: stripeClientId,
+            client_secret: stripeApiKey,
             code: authorizationCode,
             grant_type: "authorization_code"
         })
@@ -36,7 +38,7 @@ export async function fetchStripeCredentials(authorizationCode: string): Promise
 
     if ((resp.body as StripeAuthErrorResponse).error && (resp.body as StripeAuthErrorResponse).error_description) {
         console.error(`Unable to complete Stripe authorization.`, resp.text);
-        throw new Error(resp.body.error_description);
+        throw new RestError(httpStatusCode.clientError.BAD_REQUEST, resp.body.error_description);
     }
 
     console.error("Unexpected Stripe authorization error.", resp.status, resp.text);
