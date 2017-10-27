@@ -13,6 +13,7 @@ BUILD_ARTIFACT_BUCKET="lightrail-sandbox-deploymentartifacts"
 # Parameter values for the sam template.  see: `aws cloudformation deploy help`
 PARAMETER_OVERRIDES="--parameter-overrides"
 PARAMETER_OVERRIDES+=" LightrailDomain=api.lightraildev.net"
+PARAMETER_OVERRIDES+=" LightrailWebappDomain=www.lightraildev.net"
 PARAMETER_OVERRIDES+=" SecureConfigBucket=dev-lightrailsecureconfig-1q7bltwyiihpq-bucket-id162gq711cc"
 PARAMETER_OVERRIDES+=" SecureConfigKeyJwt=authentication_badge_key.json"
 PARAMETER_OVERRIDES+=" SecureConfigKeyRoleDefinitions=RoleDefinitions.json"

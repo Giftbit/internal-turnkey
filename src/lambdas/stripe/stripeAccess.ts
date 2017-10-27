@@ -1,12 +1,13 @@
 import * as superagent from "superagent";
-import {StripeAuthResponse} from "./StripeAuthResponse";
+import {StripeAuth} from "./StripeAuth";
 import {StripeAuthErrorResponse} from "./StripeAuthErrorResponse";
 import {httpStatusCode, RestError} from "cassava";
+import {StripeAccount} from "./StripeAccount";
 
 export const stripeClientId: string = "ca_BeEfEZCpfrRFtHK3olpVsvWR8CcuwX1q";  // TODO store and fetch, don't hard code
 const stripeApiKey: string = "sk_test_Febdx6DaFUrKUNBT0zGTivZp";
 
-export async function fetchStripeCredentials(authorizationCode: string): Promise<StripeAuthResponse> {
+export async function fetchStripeAuth(authorizationCode: string): Promise<StripeAuth> {
     const resp = await superagent.post("https://connect.stripe.com/oauth/token")
         .query({
             client_secret: stripeApiKey,
@@ -16,7 +17,7 @@ export async function fetchStripeCredentials(authorizationCode: string): Promise
         .ok(() => true);
 
     if (resp.ok) {
-        const stripeAuthResponse: StripeAuthResponse = resp.body;
+        const stripeAuthResponse: StripeAuth = resp.body;
         if (!stripeAuthResponse.token_type
             || !stripeAuthResponse.stripe_publishable_key
             || !stripeAuthResponse.scope
@@ -26,8 +27,6 @@ export async function fetchStripeCredentials(authorizationCode: string): Promise
             const msg = "POSTing to https://connect.stripe.com/oauth/token generated a 200 response but the body does not match the expected output.";
             console.error(msg, {
                 ...resp.body,
-                stripe_publishable_key: stripeAuthResponse.stripe_publishable_key ? "***redacted***" : "!!!missing!!!",
-                stripe_user_id: stripeAuthResponse.stripe_user_id ? "***redacted***" : "!!!missing!!!",
                 refresh_token: stripeAuthResponse.refresh_token ? "***redacted***" : "!!!missing!!!",
                 access_token: stripeAuthResponse.access_token ? "***redacted***" : "!!!missing!!!",
             });
@@ -42,5 +41,20 @@ export async function fetchStripeCredentials(authorizationCode: string): Promise
     }
 
     console.error("Unexpected Stripe authorization error.", resp.status, resp.text);
+    throw new Error("Unexpected Stripe authorization error.");
+}
+
+export async function fetchStripeAccount(stripeAuth: StripeAuth): Promise<StripeAccount> {
+    const resp = await superagent.get(`https://${stripeApiKey}:@api.stripe.com/v1/accounts/${stripeAuth.stripe_user_id}`)
+        .set("Stripe-Account", stripeAuth.stripe_user_id)
+        .ok(() => true);
+
+    if (resp.ok) {
+        return resp.body;
+    } else if (resp.status === 401) {
+        return null;
+    }
+
+    console.error("Unexpected error accessing Stripe account.", resp.status, resp.text);
     throw new Error("Unexpected Stripe authorization error.");
 }
