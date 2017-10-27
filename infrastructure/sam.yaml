@@ -83,6 +83,15 @@ Resources:
                     !Sub "s3.${AWS::Region}.amazonaws.com"
                   "kms:EncryptionContext:aws:s3:arn":
                     !Sub "arn:aws:s3:::${SecureConfigBucket}/*"
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: "*"
+              #Condition:
+              #  StringEquals:
+              #   "ses:FromAddress":
+              #      "email@example.com"
       Tags:
         ShortName: GiftcardPurchaseFunction
         Service: Turnkey
