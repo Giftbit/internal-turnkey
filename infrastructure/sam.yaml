@@ -9,6 +9,10 @@ Parameters:
     Type: String
     Description: The domain of the Lightrail REST API
     AllowedPattern: (\w+\.)+\w{3}
+  LightrailWebappDomain:
+    Type: String
+    Description: The domain of the Lightrail web app
+    AllowedPattern: (\w+\.)+\w{3}
   SecureConfigBucket:
     Type: String
     Description: Name of the S3 bucket holding the JWT secure config
@@ -24,6 +28,27 @@ Parameters:
     AllowedPattern: arn:aws:kms:[a-zA-Z_0-9\-]+:\d{12}:key/[a-zA-Z_0-9+=,.@\-_/]+
 
 Resources:
+  StripeConnectStateTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: uuid
+          AttributeType: S
+      KeySchema:
+        - AttributeName: uuid
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      Tags:
+        - Key: ShortName
+          Value: StripeConnectStateTable
+        - Key: Service
+          Value: Turnkey
+
   GiftcardPurchaseFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -88,12 +113,23 @@ Resources:
       Environment:
         Variables:
           LIGHTRAIL_DOMAIN: !Ref LightrailDomain
+          LIGHTRAIL_WEBAPP_DOMAIN: !Ref LightrailWebappDomain
           SECURE_CONFIG_BUCKET: !Ref SecureConfigBucket
           SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
           SECURE_CONFIG_KEY_ROLE_DEFINITIONS: !Ref SecureConfigKeyRoleDefinitions
+          STRIPE_CONNECT_STATE_TABLE: !Ref StripeConnectStateTable
       Policies:
         - Version: 2012-10-17
           Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:DescribeTable
+                - dynamodb:DeleteItem
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Resource:
+                - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${StripeConnectStateTable}"
+                - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${StripeConnectStateTable}/*"
             - Effect: Allow
               Action:
                 - s3:GetObject
