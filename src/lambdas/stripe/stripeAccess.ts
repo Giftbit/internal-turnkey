@@ -1,15 +1,15 @@
 import * as superagent from "superagent";
+import {StripeAccount} from "./StripeAccount";
 import {StripeAuth} from "./StripeAuth";
 import {StripeAuthErrorResponse} from "./StripeAuthErrorResponse";
 import {httpStatusCode, RestError} from "cassava";
-import {StripeAccount} from "./StripeAccount";
 
 export const stripeClientId: string = "ca_BeEfEZCpfrRFtHK3olpVsvWR8CcuwX1q";  // TODO store and fetch, don't hard code
 const stripeApiKey: string = "sk_test_Febdx6DaFUrKUNBT0zGTivZp";
 
 export async function fetchStripeAuth(authorizationCode: string): Promise<StripeAuth> {
     const resp = await superagent.post("https://connect.stripe.com/oauth/token")
-        .query({
+        .field({
             client_secret: stripeApiKey,
             code: authorizationCode,
             grant_type: "authorization_code"
@@ -44,17 +44,23 @@ export async function fetchStripeAuth(authorizationCode: string): Promise<Stripe
     throw new Error("Unexpected Stripe authorization error.");
 }
 
+export async function revokeStripeAuth(stripeAuth: StripeAuth): Promise<void> {
+    await superagent.post(`https://${stripeApiKey}:@connect.stripe.com/oauth/deauthorize`)
+        .field({
+            client_id: stripeClientId,
+            stripe_user_id: stripeAuth.stripe_user_id
+        })
+        .ok(resp => resp.status < 400 || resp.status === 401);
+}
+
 export async function fetchStripeAccount(stripeAuth: StripeAuth): Promise<StripeAccount> {
     const resp = await superagent.get(`https://${stripeApiKey}:@api.stripe.com/v1/accounts/${stripeAuth.stripe_user_id}`)
         .set("Stripe-Account", stripeAuth.stripe_user_id)
-        .ok(() => true);
+        .ok(resp => resp.status === 200 || resp.status === 401);
 
     if (resp.ok) {
         return resp.body;
-    } else if (resp.status === 401) {
-        return null;
     }
 
-    console.error("Unexpected error accessing Stripe account.", resp.status, resp.text);
-    throw new Error("Unexpected Stripe authorization error.");
+    return null;
 }

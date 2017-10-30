@@ -3,7 +3,9 @@ import * as cassava from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as stripeAccess from "./stripeAccess";
 import * as kvsAccess from "./kvsAccess";
-import {createStripeConnectState, getStripeConnectState} from "./StripeConnectState";
+import {StripeConnectState} from "./StripeConnectState";
+import {revokeStripeAuth} from "./stripeAccess";
+import {kvsDelete} from "./kvsAccess";
 
 export const router = new cassava.Router();
 
@@ -17,7 +19,7 @@ router.route("/v1/turnkey/stripe/callback")
         evt.requireQueryStringParameter("state");
         evt.requireQueryStringParameter("code");
 
-        const state = await getStripeConnectState(evt.queryStringParameters["state"]);
+        const state = await StripeConnectState.get(evt.queryStringParameters["state"]);
         if (!state) {
             throw new cassava.RestError(cassava.httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "Stripe Connect link has expired.  Please start again.");
         }
@@ -61,13 +63,34 @@ router.route("/v1/turnkey/stripe")
             }
         }
 
-        const stripeConnectState = await createStripeConnectState(auth);
+        const stripeConnectState = await StripeConnectState.create(auth);
+        const redirectUri = `https://${process.env["LIGHTRAIL_DOMAIN"]}/v1/turnkey/stripe/callback`;
 
         return {
             statusCode: 302,
             body: null,
             headers: {
-                Location: `https://connect.stripe.com/oauth/authorize?response_type=code&scope=read_write&client_id=${encodeURIComponent(stripeAccess.stripeClientId)}&state=${encodeURIComponent(stripeConnectState.uuid)}`
+                Location: `https://connect.stripe.com/oauth/authorize?response_type=code&scope=read_write&client_id=${encodeURIComponent(stripeAccess.stripeClientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(stripeConnectState.uuid)}`
+            }
+        };
+    });
+
+router.route("/v1/turnkey/stripe")
+    .method("DELETE")
+    .handler(async evt => {
+        const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
+        auth.requireIds("giftbitUserId");
+        auth.requireScopes("lightrailV1:stripeConnect:write");
+
+        const stripeAuth = await kvsAccess.kvsGet(evt.meta["auth-token"], "stripeAuth");
+        if (stripeAuth) {
+            await revokeStripeAuth(stripeAuth);
+            await kvsDelete(evt.meta["auth-token"], "stripeAuth");
+        }
+
+        return {
+            body: {
+                success: true
             }
         };
     });
