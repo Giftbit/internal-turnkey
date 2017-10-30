@@ -17,6 +17,7 @@ PARAMETER_OVERRIDES+=" LightrailWebappDomain=www.lightraildev.net"
 PARAMETER_OVERRIDES+=" SecureConfigBucket=dev-lightrailsecureconfig-1q7bltwyiihpq-bucket-id162gq711cc"
 PARAMETER_OVERRIDES+=" SecureConfigKeyJwt=authentication_badge_key.json"
 PARAMETER_OVERRIDES+=" SecureConfigKeyRoleDefinitions=RoleDefinitions.json"
+PARAMETER_OVERRIDES+=" SecureConfigKeyStripe=stripe_connect.json"
 PARAMETER_OVERRIDES+=" SecureConfigKmsArn=arn:aws:kms:us-west-2:757264843183:key/5240d853-a89f-4510-82ba-386bf2b977dc"
 
 USAGE="usage: $0 <command name>\nvalid command names: build delete deploy invoke upload"

@@ -4,8 +4,6 @@ import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as stripeAccess from "./stripeAccess";
 import * as kvsAccess from "./kvsAccess";
 import {StripeConnectState} from "./StripeConnectState";
-import {revokeStripeAuth} from "./stripeAccess";
-import {kvsDelete} from "./kvsAccess";
 
 export const router = new cassava.Router();
 
@@ -64,13 +62,17 @@ router.route("/v1/turnkey/stripe")
         }
 
         const stripeConnectState = await StripeConnectState.create(auth);
-        const redirectUri = `https://${process.env["LIGHTRAIL_DOMAIN"]}/v1/turnkey/stripe/callback`;
+        const stripeCallbackLocation = `https://${process.env["LIGHTRAIL_DOMAIN"]}/v1/turnkey/stripe/callback`;
+        const stripeConfig = await stripeAccess.getStripeConfig();
+        const location = `https://connect.stripe.com/oauth/authorize?response_type=code&scope=read_write&client_id=${encodeURIComponent(stripeConfig.clientId)}&redirect_uri=${encodeURIComponent(stripeCallbackLocation)}&state=${encodeURIComponent(stripeConnectState.uuid)}`;
 
         return {
             statusCode: 302,
-            body: null,
+            body: {
+                location
+            },
             headers: {
-                Location: `https://connect.stripe.com/oauth/authorize?response_type=code&scope=read_write&client_id=${encodeURIComponent(stripeAccess.stripeClientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(stripeConnectState.uuid)}`
+                Location: location
             }
         };
     });
@@ -84,8 +86,8 @@ router.route("/v1/turnkey/stripe")
 
         const stripeAuth = await kvsAccess.kvsGet(evt.meta["auth-token"], "stripeAuth");
         if (stripeAuth) {
-            await revokeStripeAuth(stripeAuth);
-            await kvsDelete(evt.meta["auth-token"], "stripeAuth");
+            await stripeAccess.revokeStripeAuth(stripeAuth);
+            await kvsAccess.kvsDelete(evt.meta["auth-token"], "stripeAuth");
         }
 
         return {

@@ -1,16 +1,22 @@
 import * as superagent from "superagent";
+import * as giftbitRoutes from "giftbit-cassava-routes";
 import {StripeAccount} from "./StripeAccount";
 import {StripeAuth} from "./StripeAuth";
 import {StripeAuthErrorResponse} from "./StripeAuthErrorResponse";
 import {httpStatusCode, RestError} from "cassava";
+import {StripeConfig} from "./StripeConfig";
 
-export const stripeClientId: string = "ca_BeEfEZCpfrRFtHK3olpVsvWR8CcuwX1q";  // TODO store and fetch, don't hard code
-const stripeApiKey: string = "sk_test_Febdx6DaFUrKUNBT0zGTivZp";
+const stripeConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<StripeConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_STRIPE");
+
+export async function getStripeConfig(): Promise<StripeConfig> {
+    return stripeConfigPromise;
+}
 
 export async function fetchStripeAuth(authorizationCode: string): Promise<StripeAuth> {
+    const stripeConfig = await stripeConfigPromise;
     const resp = await superagent.post("https://connect.stripe.com/oauth/token")
         .field({
-            client_secret: stripeApiKey,
+            client_secret: stripeConfig.secretKey,
             code: authorizationCode,
             grant_type: "authorization_code"
         })
@@ -45,16 +51,18 @@ export async function fetchStripeAuth(authorizationCode: string): Promise<Stripe
 }
 
 export async function revokeStripeAuth(stripeAuth: StripeAuth): Promise<void> {
-    await superagent.post(`https://${stripeApiKey}:@connect.stripe.com/oauth/deauthorize`)
+    const stripeConfig = await stripeConfigPromise;
+    await superagent.post(`https://${stripeConfig.secretKey}:@connect.stripe.com/oauth/deauthorize`)
         .field({
-            client_id: stripeClientId,
+            client_id: stripeConfig.clientId,
             stripe_user_id: stripeAuth.stripe_user_id
         })
         .ok(resp => resp.status < 400 || resp.status === 401);
 }
 
 export async function fetchStripeAccount(stripeAuth: StripeAuth): Promise<StripeAccount> {
-    const resp = await superagent.get(`https://${stripeApiKey}:@api.stripe.com/v1/accounts/${stripeAuth.stripe_user_id}`)
+    const stripeConfig = await stripeConfigPromise;
+    const resp = await superagent.get(`https://${stripeConfig.secretKey}:@api.stripe.com/v1/accounts/${stripeAuth.stripe_user_id}`)
         .set("Stripe-Account", stripeAuth.stripe_user_id)
         .ok(resp => resp.status === 200 || resp.status === 401);
 
