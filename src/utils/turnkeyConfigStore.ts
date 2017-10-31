@@ -12,4 +12,3 @@ export async function getPublicConfig(apiKey: string): Promise<TurnkeyPublicConf
 export async function getPrivateConfig(apiKey: string): Promise<TurnkeyPrivateConfig> {
     return await storageUtils.getKey(TURNKEY_PRIVATE_CONFIG_KEY, apiKey) as TurnkeyPrivateConfig
 }
-
