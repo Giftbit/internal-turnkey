@@ -62,7 +62,7 @@ router.route("/v1/turnkey/stripe")
         }
 
         const stripeConnectState = await StripeConnectState.create(auth);
-        const stripeCallbackLocation = `https://${process.env["LIGHTRAIL_DOMAIN"]}/v1/turnkey/stripe/callback`;
+        const stripeCallbackLocation = `https://${process.env["LIGHTRAIL_WEBAPP_DOMAIN"]}/v1/turnkey/stripe/callback`;
         const stripeConfig = await stripeAccess.getStripeConfig();
         const location = `https://connect.stripe.com/oauth/authorize?response_type=code&scope=read_write&client_id=${encodeURIComponent(stripeConfig.clientId)}&redirect_uri=${encodeURIComponent(stripeCallbackLocation)}&state=${encodeURIComponent(stripeConnectState.uuid)}`;
 
