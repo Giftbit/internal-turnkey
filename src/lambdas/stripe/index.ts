@@ -3,7 +3,7 @@ import * as cassava from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as stripeAccess from "./stripeAccess";
 import * as kvsAccess from "./kvsAccess";
-import {createStripeConnectState, getStripeConnectState} from "./StripeConnectState";
+import {StripeConnectState} from "./StripeConnectState";
 
 export const router = new cassava.Router();
 
@@ -17,7 +17,7 @@ router.route("/v1/turnkey/stripe/callback")
         evt.requireQueryStringParameter("state");
         evt.requireQueryStringParameter("code");
 
-        const state = await getStripeConnectState(evt.queryStringParameters["state"]);
+        const state = await StripeConnectState.get(evt.queryStringParameters["state"]);
         if (!state) {
             throw new cassava.RestError(cassava.httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "Stripe Connect link has expired.  Please start again.");
         }
@@ -61,13 +61,38 @@ router.route("/v1/turnkey/stripe")
             }
         }
 
-        const stripeConnectState = await createStripeConnectState(auth);
+        const stripeConnectState = await StripeConnectState.create(auth);
+        const stripeCallbackLocation = `https://${process.env["LIGHTRAIL_DOMAIN"]}/v1/turnkey/stripe/callback`;
+        const stripeConfig = await stripeAccess.getStripeConfig();
+        const location = `https://connect.stripe.com/oauth/authorize?response_type=code&scope=read_write&client_id=${encodeURIComponent(stripeConfig.clientId)}&redirect_uri=${encodeURIComponent(stripeCallbackLocation)}&state=${encodeURIComponent(stripeConnectState.uuid)}`;
 
         return {
             statusCode: 302,
-            body: null,
+            body: {
+                location
+            },
             headers: {
-                Location: `https://connect.stripe.com/oauth/authorize?response_type=code&scope=read_write&client_id=${encodeURIComponent(stripeAccess.stripeClientId)}&state=${encodeURIComponent(stripeConnectState.uuid)}`
+                Location: location
+            }
+        };
+    });
+
+router.route("/v1/turnkey/stripe")
+    .method("DELETE")
+    .handler(async evt => {
+        const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
+        auth.requireIds("giftbitUserId");
+        auth.requireScopes("lightrailV1:stripeConnect:write");
+
+        const stripeAuth = await kvsAccess.kvsGet(evt.meta["auth-token"], "stripeAuth");
+        if (stripeAuth) {
+            await stripeAccess.revokeStripeAuth(stripeAuth);
+            await kvsAccess.kvsDelete(evt.meta["auth-token"], "stripeAuth");
+        }
+
+        return {
+            body: {
+                success: true
             }
         };
     });

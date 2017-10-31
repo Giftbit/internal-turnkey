@@ -2,7 +2,6 @@ import * as aws from "aws-sdk";
 import * as dynameh from "dynameh";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as uuid from "uuid";
-import {StripeConnectState} from "./StripeConnectState";
 
 export interface StripeConnectState {
     uuid: string;
@@ -23,23 +22,25 @@ export const tableSchema: dynameh.TableSchema = {
     ttlField: "ttl"
 };
 
-export async function createStripeConnectState(auth: giftbitRoutes.jwtauth.AuthorizationBadge): Promise<StripeConnectState> {
-    const ttl = new Date();
-    ttl.setTime(ttl.getTime() + 6 * 60 * 60 * 1000);
-    const state: StripeConnectState = {
-        uuid: uuid.v4(),
-        ttl,
-        jwtPayload: auth.getJwtPayload()
-    };
+export namespace StripeConnectState {
+    export async function create(auth: giftbitRoutes.jwtauth.AuthorizationBadge): Promise<StripeConnectState> {
+        const ttl = new Date();
+        ttl.setTime(ttl.getTime() + 6 * 60 * 60 * 1000);
+        const state: StripeConnectState = {
+            uuid: uuid.v4(),
+            ttl,
+            jwtPayload: auth.getJwtPayload()
+        };
 
-    const putReq = dynameh.requestBuilder.buildPutInput(tableSchema, state);
-    await dynamodb.putItem(putReq).promise();
+        const putReq = dynameh.requestBuilder.buildPutInput(tableSchema, state);
+        await dynamodb.putItem(putReq).promise();
 
-    return state;
-}
+        return state;
+    }
 
-export async function getStripeConnectState(uuid: string): Promise<StripeConnectState> {
-    const getReq = dynameh.requestBuilder.buildGetInput(tableSchema, uuid);
-    const getResp = await dynamodb.getItem(getReq).promise();
-    return dynameh.responseUnwrapper.unwrapGetOutput(getResp);
+    export async function get(uuid: string): Promise<StripeConnectState> {
+        const getReq = dynameh.requestBuilder.buildGetInput(tableSchema, uuid);
+        const getResp = await dynamodb.getItem(getReq).promise();
+        return dynameh.responseUnwrapper.unwrapGetOutput(getResp);
+    }
 }
