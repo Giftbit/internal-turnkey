@@ -2,7 +2,7 @@ import "babel-polyfill";
 import * as cassava from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as stripeAccess from "./stripeAccess";
-import * as kvsAccess from "./kvsAccess";
+import * as kvsAccess from "../../utils/kvsAccess";
 import {StripeConnectState} from "./StripeConnectState";
 
 export const router = new cassava.Router();

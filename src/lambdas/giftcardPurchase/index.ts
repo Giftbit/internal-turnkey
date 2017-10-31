@@ -49,25 +49,22 @@ router.route("/v1/turnkey/purchaseGiftcard")
 
         const params = giftcardPurchaseParams.setParamsFromRequest(evt);
         giftcardPurchaseParams.validateParams(params);
-        const userSuppliedId = Date.now().toFixed(); // todo - consider using the id of the Stripe Charge object. This is unique.
 
-
-
-        // Step 1
-        // fetch user's stripe token
-        // charge user's customer using CC card token passed in request
         lightrail.configure({
             apiKey: jwt,
             restRoot: "https://" + process.env["LIGHTRAIL_DOMAIN"] + "/v1/",
             logRequests: true
         });
 
+        const userSuppliedId = Date.now().toFixed(); // todo - consider using the id of the Stripe Charge object. This is unique.
+
+
         // interesting, can't assign a contact to this card. Neither the sender, nor the recipient make sense to be added.
         // -> recipient: poppy will need to apply the gift card to an account w/ recipientEmail, but the userSuppliedId must = poppy's rocketship customer id.
         // -> sender: thomas may or may not have an account. Could lookup Thomas by email. If there is a contact, attach, otherwise, don't create one since you don't know thomas's rocketship customer id.
         const card: Card = await lightrail.cards.createCard({
             userSuppliedId: userSuppliedId,
-            currency: params.currency,
+            programId: turnkeyConfigPublic.currency,
             cardType: Card.CardType.GIFT_CARD,
             initialValue: params.initialValue,
             metadata: {
@@ -118,6 +115,10 @@ router.route("/v1/turnkey/purchaseGiftcard")
             }
         };
     });
+
+async function chargeCard(params: GiftcardPurchaseParams) {
+
+}
 
 async function emailGiftToRecipient(params: GiftcardPurchaseParams, fullcode: string, config: TurnkeyPublicConfig) {
     let emailTemplate = RECIPIENT_EMAIL;
