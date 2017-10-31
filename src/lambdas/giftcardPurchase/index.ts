@@ -28,17 +28,8 @@ router.route("/v1/turnkey/purchaseGiftcard")
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
         auth.requireIds("giftbitUserId");
 
-        // let newBadge = new AuthorizationBadge();
-        // newBadge.giftbitUserId = auth.giftbitUserId;
-        // newBadge.merchantId = auth.merchantId;
-        // newBadge.teamMemberId = auth.teamMemberId;
-        // newBadge.issuer = "CARD_PURCHASE_SERVICE";
-        // newBadge.scopes = ["lightrailV1:card", "lightrailV1:program:show"];
-        // const secret: string = (await authConfigPromise).secretkey;
-        // let jwt = newBadge.sign(secret);//newBadge.sign(secret);
-
         const secret: string = (await authConfigPromise).secretkey;
-        auth.scopes = ["lightrailV1:card", "lightrailV1:program:show", "lightrailV1:turnkeyprivate:show"]; // todo - scope for private turnkey config needs to be present
+        auth.scopes = ["lightrailV1:card", "lightrailV1:program:show", "lightrailV1:turnkeyconfigprivate:show"]; // todo - scope for private turnkey config needs to be present
         auth.issuer = "CARD_PURCHASE_SERVICE";
         let jwt = auth.sign(secret);
 
@@ -50,20 +41,21 @@ router.route("/v1/turnkey/purchaseGiftcard")
         const params = giftcardPurchaseParams.setParamsFromRequest(evt);
         giftcardPurchaseParams.validateParams(params);
 
+        /* todo - uncomment and test
+         const charge = await chargeCard(params, turnkeyConfigPublic.currency, turnkeyConfigPrivate.stripeSecret);
+         if (!charge) {
+         throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "stripe charge failed.");
+         }
+         */
+
         lightrail.configure({
             apiKey: jwt,
             restRoot: "https://" + process.env["LIGHTRAIL_DOMAIN"] + "/v1/",
             logRequests: true
         });
 
-        const userSuppliedId = Date.now().toFixed(); // todo - consider using the id of the Stripe Charge object. This is unique.
-
-
-        // interesting, can't assign a contact to this card. Neither the sender, nor the recipient make sense to be added.
-        // -> recipient: poppy will need to apply the gift card to an account w/ recipientEmail, but the userSuppliedId must = poppy's rocketship customer id.
-        // -> sender: thomas may or may not have an account. Could lookup Thomas by email. If there is a contact, attach, otherwise, don't create one since you don't know thomas's rocketship customer id.
         const card: Card = await lightrail.cards.createCard({
-            userSuppliedId: userSuppliedId,
+            userSuppliedId: params.stripeCardToken,
             programId: turnkeyConfigPublic.currency,
             cardType: Card.CardType.GIFT_CARD,
             initialValue: params.initialValue,
@@ -74,7 +66,10 @@ router.route("/v1/turnkey/purchaseGiftcard")
                 },
                 recipient: {
                     email: params.recipientEmail
-                }
+                },
+                // charge: {
+                //     charge: charge
+                // }
             }
         });
         const fullcode: Fullcode = await lightrail.cards.getFullcode(card);
@@ -116,8 +111,23 @@ router.route("/v1/turnkey/purchaseGiftcard")
         };
     });
 
-async function chargeCard(params: GiftcardPurchaseParams) {
+async function chargeCard(requestParams: GiftcardPurchaseParams, currency: string, stripeSecret: string): Promise {
+    const stripe = require("stripe")(stripeSecret);
 
+    // Charge the user's card:
+    return stripe.charges.create({
+        amount: requestParams.initialValue,
+        currency: currency,
+        description: `Charge for gift card. userSuppliedId = ${requestParams.stripeCardToken}.`,
+        source: requestParams.stripeCardToken,
+    }, function (err, charge) {
+        if (err) {
+            console.log(err)
+        } else {
+            console.log(`Credit card with token ${requestParams.stripeCardToken} has been charged ${requestParams.initialValue} ${currency}. Resulting charge ${charge}.`)
+            return charge
+        }
+    });
 }
 
 async function emailGiftToRecipient(params: GiftcardPurchaseParams, fullcode: string, config: TurnkeyPublicConfig) {
@@ -155,13 +165,10 @@ async function emailGiftToRecipient(params: GiftcardPurchaseParams, fullcode: st
 
             console.log("EMAIL CODE END");
             console.log('EMAIL: ', email);
+            return data
         }
     });
 }
 
 //noinspection JSUnusedGlobalSymbols
 export const handler = router.getLambdaHandler();
-
-// async function createInactiveCard(jwt: string, initialValue: number): Promise<lightrail.model.Card> {
-//
-// }
