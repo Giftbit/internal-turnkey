@@ -5,11 +5,11 @@ import * as lightrail from "lightrail-client";
 import {Card, Fullcode} from "lightrail-client/dist/model";
 import * as aws from "aws-sdk";
 import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
-import {TurnkeyPrivateConfig, validatePrivateTurnkeyConfig} from "../../utils/TurnkeyPrivateConfig";
 import * as giftcardPurchaseParams from "./GiftcardPurchaseParams";
 import {GiftcardPurchaseParams} from "./GiftcardPurchaseParams";
 import {RECIPIENT_EMAIL} from "./RecipientEmail";
-import {TurnkeyPublicConfig, validatePublicTurnkeyConfig} from "../../utils/TurnkeyPublicConfig";
+import {TurnkeyPublicConfig} from "../../utils/TurnkeyPublicConfig";
+import {TurnkeyConfig, validateTurnkeyConfig} from "../../utils/TurnkeyConfig";
 
 const ses = new aws.SES({region: 'us-west-2'});
 
@@ -33,10 +33,10 @@ router.route("/v1/turnkey/purchaseGiftcard")
         auth.issuer = "CARD_PURCHASE_SERVICE";
         let jwt = auth.sign(secret);
 
-        const turnkeyConfigPublic: TurnkeyPublicConfig = await turnkeyConfigUtil.getPublicConfig(jwt);
-        validatePublicTurnkeyConfig(turnkeyConfigPublic);
-        const turnkeyConfigPrivate: TurnkeyPrivateConfig = await turnkeyConfigUtil.getPrivateConfig(jwt);
-        validatePrivateTurnkeyConfig(turnkeyConfigPrivate);
+        const config: TurnkeyConfig = await turnkeyConfigUtil.getConfig(jwt);
+        console.log("Fetched config: " + JSON.stringify(config));
+        validateTurnkeyConfig(config);
+        console.log("Finished validating config!");
 
         const params = giftcardPurchaseParams.setParamsFromRequest(evt);
         giftcardPurchaseParams.validateParams(params);
@@ -56,7 +56,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
 
         const card: Card = await lightrail.cards.createCard({
             userSuppliedId: params.stripeCardToken,
-            programId: turnkeyConfigPublic.currency,
+            programId: config.publicConfig.programId,
             cardType: Card.CardType.GIFT_CARD,
             initialValue: params.initialValue,
             metadata: {
@@ -76,9 +76,9 @@ router.route("/v1/turnkey/purchaseGiftcard")
         // Step 3
         // email the recipient the fullcode
         // email contains: company name and redemption url (Stretch: logo). These are from turnkey config.
-        emailGiftToRecipient(params, fullcode.code, turnkeyConfigPublic);
+        emailGiftToRecipient(params, fullcode.code, config.publicConfig);
 
-        // todo - doesn't seem like sendTemplatedEmail works with the most reason version of the aws-sdk. The function seems to exist but results in TypeError: ses.sendTemplatedEmail is not a function. Possible that this is a really bad permission error.
+        // todo - doesn't seem like sendTemplatedEmail works with the most recent version of the aws-sdk. The function seems to exist but results in TypeError: ses.sendTemplatedEmail is not a function. Possible that this is a really bad permission error.
         // const eTemplateParams: SendTemplatedEmailRequest = {
         //     "Source": "tim@giftbit.com",
         //     "Template": "MyTemplate",
@@ -106,12 +106,12 @@ router.route("/v1/turnkey/purchaseGiftcard")
                 jwt: jwt,
                 card: card,
                 fullcode: fullcode,
-                turnkeyConfig: turnkeyConfigPublic
+                turnkeyConfig: config
             }
         };
     });
 
-async function chargeCard(requestParams: GiftcardPurchaseParams, currency: string, stripeSecret: string): Promise {
+async function chargeCard(requestParams: GiftcardPurchaseParams, currency: string, stripeSecret: string): Promise<any> {
     const stripe = require("stripe")(stripeSecret);
 
     // Charge the user's card:
@@ -130,13 +130,13 @@ async function chargeCard(requestParams: GiftcardPurchaseParams, currency: strin
     });
 }
 
-async function emailGiftToRecipient(params: GiftcardPurchaseParams, fullcode: string, config: TurnkeyPublicConfig) {
+async function emailGiftToRecipient(params: GiftcardPurchaseParams, fullcode: string, publicConfig: TurnkeyPublicConfig) {
     let emailTemplate = RECIPIENT_EMAIL;
     emailTemplate = emailTemplate.replace("{{message}}", params.message);
     emailTemplate = emailTemplate.replace("{{fullcode}}", fullcode);
-    emailTemplate = emailTemplate.replace("{{companyName}}", config.companyName);
-    emailTemplate = emailTemplate.replace("{{logo}}", config.logo);
-    emailTemplate = emailTemplate.replace("{{termsAndConditions}}", config.termsAndConditions);
+    emailTemplate = emailTemplate.replace("{{companyName}}", publicConfig.companyName);
+    emailTemplate = emailTemplate.replace("{{logo}}", publicConfig.logo);
+    emailTemplate = emailTemplate.replace("{{termsAndConditions}}", publicConfig.termsAndConditions);
 
 
     const eParams = {
