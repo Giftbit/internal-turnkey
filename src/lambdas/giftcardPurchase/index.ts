@@ -1,5 +1,6 @@
 import "babel-polyfill";
 import * as cassava from "cassava";
+import {httpStatusCode, RestError} from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as lightrail from "lightrail-client";
 import {Card, Fullcode} from "lightrail-client/dist/model";
@@ -8,10 +9,10 @@ import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
 import * as giftcardPurchaseParams from "./GiftcardPurchaseParams";
 import {GiftcardPurchaseParams} from "./GiftcardPurchaseParams";
 import {RECIPIENT_EMAIL} from "./RecipientEmail";
-import {TurnkeyPublicConfig} from "../../utils/TurnkeyPublicConfig";
 import {TurnkeyConfig, validateTurnkeyConfig} from "../../utils/TurnkeyConfig";
 import * as kvsAccess from "../../utils/kvsAccess";
-import {httpStatusCode, RestError} from "cassava";
+import {StripeAuth} from "../stripe/StripeAuth";
+import * as stripeAccess from "../stripe/stripeAccess";
 
 const ses = new aws.SES({region: 'us-west-2'});
 
@@ -40,12 +41,11 @@ router.route("/v1/turnkey/purchaseGiftcard")
         console.log("Fetched config: " + JSON.stringify(config));
         validateTurnkeyConfig(config);
         console.log("Finished validating config!");
-        const stripeAuth = await kvsAccess.kvsGet(evt.meta["auth-token"], "stripeAuth");
-        console.log("stripeAuth: " + JSON.stringify(stripeAuth));
 
         const params = giftcardPurchaseParams.setParamsFromRequest(evt);
         giftcardPurchaseParams.validateParams(params);
-         const charge = await chargeCard(params, turnkeyConfigPublic.currency, turnkeyConfigPrivate.stripeSecret);
+
+        const charge = await chargeCard(params, config.currency, jwt);
          if (!charge) {
              throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "stripe charge failed.");
          }
@@ -79,7 +79,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
         // Step 3
         // email the recipient the fullcode
         // email contains: company name and redemption url (Stretch: logo). These are from turnkey config.
-        emailGiftToRecipient(params, fullcode.code, config.publicConfig);
+        emailGiftToRecipient(params, fullcode.code, config);
 
         // todo - doesn't seem like sendTemplatedEmail works with the most recent version of the aws-sdk. The function seems to exist but results in TypeError: ses.sendTemplatedEmail is not a function. Possible that this is a really bad permission error.
         // const eTemplateParams: SendTemplatedEmailRequest = {
@@ -114,32 +114,42 @@ router.route("/v1/turnkey/purchaseGiftcard")
         };
     });
 
-async function chargeCard(requestParams: GiftcardPurchaseParams, currency: string, stripeSecret: string): Promise<any> {
-    const stripe = require("stripe")(stripeSecret);
+async function chargeCard(requestParams: GiftcardPurchaseParams, currency: string, jwt: string): Promise<any> {
+    const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(jwt, "stripeAuth");
+    console.log("merchantStripeConfig: " + JSON.stringify(merchantStripeConfig));
+    const lightrailStripeConfig = await stripeAccess.getStripeConfig();
+    console.log("lightrailStripeConfig: " + JSON.stringify(lightrailStripeConfig));
 
+    const stripe = require("stripe")(lightrailStripeConfig.secretKey);
+
+    console.log(`Attempting to charge card on behalf of merchant.`);
     // Charge the user's card:
     return stripe.charges.create({
         amount: requestParams.initialValue,
         currency: currency,
         description: `Charge for gift card. userSuppliedId = ${requestParams.stripeCardToken}.`,
         source: requestParams.stripeCardToken,
+        destination: {
+            account: merchantStripeConfig.stripe_user_id
+        }
     }, function (err, charge) {
         if (err) {
+            console.log("Charging card failed!");
             console.log(err)
         } else {
-            console.log(`Credit card with token ${requestParams.stripeCardToken} has been charged ${requestParams.initialValue} ${currency}. Resulting charge ${charge}.`)
+            console.log(`Credit card with token ${requestParams.stripeCardToken} has been charged ${requestParams.initialValue} ${currency}. Resulting charge ${charge}.`);
             return charge
         }
     });
 }
 
-async function emailGiftToRecipient(params: GiftcardPurchaseParams, fullcode: string, publicConfig: TurnkeyPublicConfig) {
+async function emailGiftToRecipient(params: GiftcardPurchaseParams, fullcode: string, turnkeyConfig: TurnkeyConfig) {
     let emailTemplate = RECIPIENT_EMAIL;
     emailTemplate = emailTemplate.replace("{{message}}", params.message);
     emailTemplate = emailTemplate.replace("{{fullcode}}", fullcode);
-    emailTemplate = emailTemplate.replace("{{companyName}}", publicConfig.companyName);
-    emailTemplate = emailTemplate.replace("{{logo}}", publicConfig.logo);
-    emailTemplate = emailTemplate.replace("{{termsAndConditions}}", publicConfig.termsAndConditions);
+    emailTemplate = emailTemplate.replace("{{companyName}}", turnkeyConfig.companyName);
+    emailTemplate = emailTemplate.replace("{{logo}}", turnkeyConfig.logo);
+    emailTemplate = emailTemplate.replace("{{termsAndConditions}}", turnkeyConfig.termsAndConditions);
 
 
     const eParams = {
@@ -153,7 +163,7 @@ async function emailGiftToRecipient(params: GiftcardPurchaseParams, fullcode: st
                 }
             },
             Subject: {
-                Data: `You have received a gift card for ${publicConfig.companyName}`
+                Data: `You have received a gift card for ${turnkeyConfig.companyName}`
             }
         },
         Source: "tim@giftbit.com"
