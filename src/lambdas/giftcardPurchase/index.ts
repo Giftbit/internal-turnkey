@@ -10,6 +10,8 @@ import {GiftcardPurchaseParams} from "./GiftcardPurchaseParams";
 import {RECIPIENT_EMAIL} from "./RecipientEmail";
 import {TurnkeyPublicConfig} from "../../utils/TurnkeyPublicConfig";
 import {TurnkeyConfig, validateTurnkeyConfig} from "../../utils/TurnkeyConfig";
+import * as kvsAccess from "../../utils/kvsAccess";
+import {httpStatusCode, RestError} from "cassava";
 
 const ses = new aws.SES({region: 'us-west-2'});
 
@@ -25,6 +27,7 @@ router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, 
 router.route("/v1/turnkey/purchaseGiftcard")
     .method("POST")
     .handler(async evt => {
+        console.log("evt:" + JSON.stringify(evt));
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
         auth.requireIds("giftbitUserId");
 
@@ -37,16 +40,15 @@ router.route("/v1/turnkey/purchaseGiftcard")
         console.log("Fetched config: " + JSON.stringify(config));
         validateTurnkeyConfig(config);
         console.log("Finished validating config!");
+        const stripeAuth = await kvsAccess.kvsGet(evt.meta["auth-token"], "stripeAuth");
+        console.log("stripeAuth: " + JSON.stringify(stripeAuth));
 
         const params = giftcardPurchaseParams.setParamsFromRequest(evt);
         giftcardPurchaseParams.validateParams(params);
-
-        /* todo - uncomment and test
          const charge = await chargeCard(params, turnkeyConfigPublic.currency, turnkeyConfigPrivate.stripeSecret);
          if (!charge) {
-         throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "stripe charge failed.");
+             throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "stripe charge failed.");
          }
-         */
 
         lightrail.configure({
             apiKey: jwt,
@@ -56,7 +58,8 @@ router.route("/v1/turnkey/purchaseGiftcard")
 
         const card: Card = await lightrail.cards.createCard({
             userSuppliedId: params.stripeCardToken,
-            programId: config.publicConfig.programId,
+            // programId: config.publicConfig.programId, // todo - this needs to be updated in the lightrail js client library to support supplying a program.
+            currency: "USD", // todo remove once programId is added
             cardType: Card.CardType.GIFT_CARD,
             initialValue: params.initialValue,
             metadata: {
@@ -141,7 +144,7 @@ async function emailGiftToRecipient(params: GiftcardPurchaseParams, fullcode: st
 
     const eParams = {
         Destination: {
-            ToAddresses: ["tim+123@giftbit.com"]
+            ToAddresses: [params.recipientEmail]
         },
         Message: {
             Body: {
@@ -150,7 +153,7 @@ async function emailGiftToRecipient(params: GiftcardPurchaseParams, fullcode: st
                 }
             },
             Subject: {
-                Data: "Email Subject!!!"
+                Data: `You have received a gift card for ${publicConfig.companyName}`
             }
         },
         Source: "tim@giftbit.com"

@@ -31,9 +31,12 @@ export function validateParams(params: GiftcardPurchaseParams): void {
         console.log(`parameter message failed validation. received ${params.message}`);
         throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "parameter message must be set")
     }
-    if (!params.recipientEmail) {
+    let emailMatch = params.recipientEmail.match(EMAIL_REGEX);
+    console.log(`emailMatch: ${emailMatch}`);
+    console.log(`!emailMatch = ${!emailMatch}`);
+    if (!params.recipientEmail || !emailMatch) {
         console.log(`parameter recipientEmail failed validation. received ${params.recipientEmail}`);
-        throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "parameter recipientEmail must be set")
+        throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "parameter recipientEmail must be a valid email")
     }
     if (!params.senderName) {
         console.log(`parameter senderName failed validation. received ${params.senderName}`);
@@ -43,9 +46,8 @@ export function validateParams(params: GiftcardPurchaseParams): void {
         console.log(`parameter senderEmail failed validation. received ${params.senderEmail}`);
         throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "parameter senderEmail must be set")
     }
-    let emailMatch = params.recipientEmail.match(EMAIL_REGEX);
-    if (!params.stripeCardToken || !emailMatch) {
+    if (!params.stripeCardToken) {
         console.log(`parameter stripeCardToken failed validation. received ${params.stripeCardToken}`);
-        throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "parameter stripeCardToken must be a valid email")
+        throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "parameter stripeCardToken must be set")
     }
 }
