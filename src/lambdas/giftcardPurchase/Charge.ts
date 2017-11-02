@@ -1,0 +1,36 @@
+export interface Charge {
+    id: string;
+    amount: number;
+    amount_refunded: number;
+    application: any;
+    application_fee: any;
+    balance_transaction: any;
+    captured: boolean;
+    created: any;
+    currency: any;
+    customer: any;
+    description: any;
+    destination: any;
+    dispute: any;
+    failure_code: any;
+    failure_message: any;
+    fraud_details: any;
+    invoice: any;
+    livemode: any;
+    metadata: any;
+    on_behalf_of: any;
+    order: any;
+    outcome: any;
+    paid: true;
+    receipt_email: any;
+    receipt_number: any;
+    refunded: any;
+    refunds: any;
+    review: any;
+    shipping: any;
+    source: any;
+    source_transfer: any;
+    statement_descriptor: any;
+    status: any;
+    transfer_group: any;
+}

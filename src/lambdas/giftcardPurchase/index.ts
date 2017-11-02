@@ -14,8 +14,8 @@ import {StripeAuth} from "../stripe/StripeAuth";
 import * as stripeAccess from "../stripe/stripeAccess";
 import {EmailGiftCardParams} from "./EmailGiftCardParams";
 import {StripeConfig} from "../stripe/StripeConfig";
-import {createChargeOnBehalfOfMerchant, retrieveTransfer, updateCharge} from "./stripeRequests";
-
+import {createCharge, createRefund, updateCharge} from "./stripeRequests";
+import {Charge} from "./Charge";
 
 const ses = new aws.SES({region: 'us-west-2'});
 
@@ -39,6 +39,11 @@ router.route("/v1/turnkey/purchaseGiftcard")
         auth.scopes = ["lightrailV1:card", "lightrailV1:program:show", "lightrailV1:turnkeyconfigprivate:show"]; // todo - scope for private turnkey config needs to be present
         auth.issuer = "CARD_PURCHASE_SERVICE";
         let jwt = auth.sign(secret);
+        lightrail.configure({
+            apiKey: jwt,
+            restRoot: "https://" + process.env["LIGHTRAIL_DOMAIN"] + "/v1/",
+            logRequests: true
+        });
 
         const config: TurnkeyConfig = await turnkeyConfigUtil.getConfig(jwt);
         console.log("Fetched config: " + JSON.stringify(config));
@@ -51,51 +56,95 @@ router.route("/v1/turnkey/purchaseGiftcard")
         const params = giftcardPurchaseParams.setParamsFromRequest(evt);
         giftcardPurchaseParams.validateParams(params);
 
-        let charge = await createChargeOnBehalfOfMerchant(params, config.currency, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
-        let transfer = await retrieveTransfer(charge, lightrailStripeConfig.secretKey);
-        const paymentIdInMerchantStripeAccount = transfer.destination_payment;
-
-        lightrail.configure({
-            apiKey: jwt,
-            restRoot: "https://" + process.env["LIGHTRAIL_DOMAIN"] + "/v1/",
-            logRequests: true
-        });
-
-        console.log("Attempting to create card.");
-        const card: Card = await lightrail.cards.createCard({
-            userSuppliedId: paymentIdInMerchantStripeAccount,
-            cardType: Card.CardType.GIFT_CARD,
-            initialValue: params.initialValue,
-            programId: config.programId,
-            metadata: {
-                sender: {
-                    name: params.senderName,
-                    email: params.senderEmail,
-                },
-                recipient: {
-                    email: params.recipientEmail
-                },
-                charge: {
-                    charge: charge,
-                    transfer: transfer
-                }
-            }
-        });
-
-        const chargeUpdate = await updateCharge(paymentIdInMerchantStripeAccount, card, merchantStripeConfig.access_token);
-        console.log("ChargeUpdate: " + JSON.stringify(chargeUpdate));
-
-        const fullcode: Fullcode = await lightrail.cards.getFullcode(card);
+        let charge: Charge;
+        let card: Card;
 
         try {
+            charge = await createCharge(params, config.currency, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
+            console.log(`created charge ${JSON.stringify(charge)}`);
+
+            card = await lightrail.cards.createCard({
+                userSuppliedId: charge.id,
+                cardType: Card.CardType.GIFT_CARD,
+                initialValue: params.initialValue,
+                programId: config.programId,
+                metadata: {
+                    sender: {
+                        name: params.senderName,
+                        email: params.senderEmail,
+                    },
+                    recipient: {
+                        email: params.recipientEmail
+                    },
+                    charge: {
+                        chargeId: charge.id,
+                    }
+                }
+            });
+            console.log(`created card ${JSON.stringify(card)}`);
+
+            const chargeUpdateParams = {
+                description: "Lightrail Gift Card",
+                metadata: {
+                    cardId: card.cardId,
+                }
+            };
+            const chargeUpdate = updateCharge(charge.id, chargeUpdateParams, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
+            console.log(`updated charge ${JSON.stringify(chargeUpdate)}`);
+
+            const fullcode: Fullcode = await lightrail.cards.getFullcode(card);
+            console.log(`retrieved fullcode lastFour ${fullcode.code.substring(fullcode.code.length - 4)}`);
+
             const emailResult = await emailGiftToRecipient({
                 fullcode: fullcode.code,
                 recipientEmail: params.recipientEmail,
                 message: params.message
             }, config);
-            console.log("email result: " + emailResult);
-        } catch (err) {
+            console.log(`sent email ${emailResult.messageId}`);
 
+            const refund = await createRefund(charge, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
+            console.log(`refunded charge ${charge.id}. refund ${JSON.stringify(refund)}`)
+
+        } catch (err) {
+            console.log(`an unexpected occurred during turnkey gift card purchase flow. ${err}`);
+            if (!charge) {
+                switch (err.type) {
+                    case 'StripeCardError':
+                        // A declined card error
+                        throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "charge failed");
+                    case 'RateLimitError':
+                        // Too many requests made to the API too quickly
+                        throw new RestError(httpStatusCode.serverError.SERVICE_UNAVAILABLE, "throttled from stripe");
+                    default:
+                        // Handle any other types of unexpected errors
+                        throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR, "stripe connection error");
+                }
+            }
+
+            if (charge) {
+                try {
+                    const refund = await createRefund(charge, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
+                    console.log(`refunded charge ${charge.id}. refund ${JSON.stringify(refund)}`)
+                } catch (err) {
+                    console.log("an issue occurred while issuing refund.")
+                    // this is a big issue. can we email ourselves?
+                    // todo
+                }
+            } else {
+                console.log(`error occurred from creating charge. ${err}`);
+                throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "charge failed")
+            }
+
+            if (card) {
+                try {
+                    const cancel = await lightrail.cards.cancelCard(card, card.cardId + "-cancel");
+                    console.log(`cancelled card ${card.cardId}. cancel response ${cancel}`)
+                } catch (err) {
+                    // this is a big issue. can we email ourselves?
+                    // todo
+                }
+            }
+            throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR, "something unexpected happened during gift card purchase")
         }
 
         // working refund code
@@ -126,9 +175,8 @@ router.route("/v1/turnkey/purchaseGiftcard")
         return {
             body: {
                 card: card,
-                fullcode: fullcode,
                 charge: charge,
-                chargeUpdate: chargeUpdate,
+                // chargeUpdate: chargeUpdate,
             }
         };
     });
@@ -145,6 +193,9 @@ function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeC
     }
 }
 
+async function cancelCard(card: Card) {
+
+}
 
 async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: TurnkeyConfig): Promise<any> {
     let emailTemplate = RECIPIENT_EMAIL;
