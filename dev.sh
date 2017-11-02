@@ -8,7 +8,7 @@
 STACK_NAME="dev-Turnkey"
 
 # The name of an S3 bucket on your account to hold deployment artifacts.
-BUILD_ARTIFACT_BUCKET="lightrail-sandbox-deploymentartifacts"
+BUILD_ARTIFACT_BUCKET="dev-lightrailturnkey-mnw-deploymentartifactbucket-eq5kkbdwofi1"
 
 # Parameter values for the sam template.  see: `aws cloudformation deploy help`
 PARAMETER_OVERRIDES="--parameter-overrides"
