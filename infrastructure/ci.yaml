@@ -18,11 +18,11 @@ Parameters:
   GitHubRepoOwner:
     Type: String
     Description: GitHub repo owner.
-    Default: mycompany
+    Default: Giftbit
   GitHubRepo:
     Type: String
     Description: GitHub git repo.
-    Default: myreponame
+    Default: internal-turnkey
   GitHubBranch:
     Type: String
     Description: Git branch to build off of.
@@ -30,6 +30,18 @@ Parameters:
   GitHubBranchDest:
     Type: String
     Description: Git branch to pull request into after a successful deploy.  Leave empty for no action.
+    Default: ""
+  CodeBuildImageNodeSSH:
+    Type: String
+    Description: Name of the docker image to build from.
+    Default: ""
+  CiKeysAccessRoleArn:
+    Type: String
+    Description: ARN for the role that can access our CI SSH keys bucket.
+    Default: ""
+  CiKeysBucketName:
+    Type: String
+    Description: S3 bucket with our CI SSH keys.
     Default: ""
 
 Conditions:
@@ -81,6 +93,10 @@ Resources:
             Resource:
               - !Sub "arn:aws:s3:::codepipeline-${AWS::Region}-*/*"
               - !Sub "arn:aws:s3:::${DeploymentArtifactBucket}/*"
+          - Effect: Allow
+            Action:
+              - sts:AssumeRole
+            Resource: !Ref CiKeysAccessRoleArn
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -92,11 +108,14 @@ Resources:
         Type: linuxContainer
         # ComputeType options: BUILD_GENERAL1_SMALL, BUILD_GENERAL1_MEDIUM, BUILD_GENERAL1_LARGE
         ComputeType: BUILD_GENERAL1_SMALL
-        # Run `aws codebuild list-curated-environment-images` for a complete list of images provided.
-        Image: aws/codebuild/nodejs:7.0.0
+        Image: !Ref CodeBuildImageNodeSSH
         EnvironmentVariables:
           - Name: BUILD_ARTIFACT_BUCKET
             Value: !Ref DeploymentArtifactBucket
+          - Name: CI_KEY_BUCKET
+            Value: !Ref CiKeysBucketName
+          - Name: CI_KEY_ACCESS_ROLE
+            Value: !Ref CiKeysAccessRoleArn
       Source:
         Type: CODEPIPELINE
       TimeoutInMinutes: 10
@@ -252,83 +271,28 @@ Resources:
               - lambda:UntagResource
             Resource: "*"
           # API Gateway (REST events)
-#          - Effect: Allow
-#            Action:
-#              - apigateway:*
-#            Resource: !Sub "arn:aws:apigateway:${AWS::Region}::/*"
-          # CloudWatch event triggers
-#          - Effect: Allow
-#            Action:
-#              - events:DeleteRule
-#              - events:DescribeRule
-#              - events:DisableRule
-#              - events:EnableRule
-#              - events:PutRule
-#              - events:PutTargets
-#              - events:RemoveTargets
-#            Resource: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/${ProjectName}-*"
-          # Kinesis stream event mapping
-#          - Effect: Allow
-#            Action:
-#              - kinesis:DescribeStreams
-#              - kinesis:DescribeStream
-#              - kinesis:ListStreams
-#              - kinesis:GetShardIterator
-#              - kinesis:GetRecords
-#            Resource: !Sub "arn:aws:kinesis:${AWS::Region}:${AWS::AccountId}:stream/*"
-          # DynamoBD event mapping
-#          - Effect: Allow
-#            Action:
-#              - dynamodb:DescribeStreams
-#              - dynamodb:DescribeStream
-#              - dynamodb:ListStreams
-#              - dynamodb:GetShardIterator
-#              - dynamodb:GetRecords
-#            Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*"
+          - Effect: Allow
+            Action:
+              - apigateway:*
+            Resource: !Sub "arn:aws:apigateway:${AWS::Region}::/*"
           # DynamoDB tables
-#          - Effect: Allow
-#            Action:
-#              - dynamodb:CreateTable
-#              - dynamodb:DeleteTable
-#              - dynamodb:DescribeTable
-#              - dynamodb:ListTagsOfResource
-#              - dynamodb:TagResource
-#              - dynamodb:UntagResource
-#              - dynamodb:UpdateTable
-#            Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ProjectName}-*"
+          - Effect: Allow
+            Action:
+              - dynamodb:CreateTable
+              - dynamodb:DeleteTable
+              - dynamodb:DescribeTable
+              - dynamodb:ListTagsOfResource
+              - dynamodb:TagResource
+              - dynamodb:UntagResource
+              - dynamodb:UpdateTable
+            Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ProjectName}-*"
           # DynamoDB table tagging
-#          - Effect: Allow
-#            Action:
-#              - dynamodb:ListTags
-#              - dynamodb:TagResource
-#              - dynamodb:UntagResource
-#            Resource: "*"
-          # S3
-#          - Effect: Allow
-#            Action:
-#              - s3:CreateBucket
-#              - s3:GetBucketAcl
-#              - s3:GetBucketNotification
-#              - s3:GetBucketTagging
-#              - s3:PutBucketAcl
-#              - s3:PutBucketNotification
-#              - s3:PutBucketTagging
-#            Resource: "*"
-          # SQS
-#          - Effect: Allow
-#            Action:
-#              - sqs:AddPermission
-#              - sqs:CreateQueue
-#              - sqs:DeleteQueue
-#              - sqs:GetQueueAttributes
-#              - sqs:RemovePermission
-#              - sqs:SetQueueAttributes
-#            Resource: !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${ProjectName}-*"
-          # ElasticsearchService
-#          - Effect: Allow
-#            Action:
-#              - es:*
-#            Resource: "*"
+          - Effect: Allow
+            Action:
+              - dynamodb:ListTags
+              - dynamodb:TagResource
+              - dynamodb:UntagResource
+            Resource: "*"
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:

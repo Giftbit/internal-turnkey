@@ -24,7 +24,7 @@ Parameters:
     Description: Key of the role definitions secure config object in S3
   SecureConfigKeyStripe:
     Type: String
-    Description: Key of the Stripe secure config object in S3
+    Description: Key of the Stripe Connect secure config object in S3
   SecureConfigKmsArn:
     Type: String
     Description: Optional ARN of the KMS encrypting the S3 bucket
