@@ -7,7 +7,6 @@ import {Card, Fullcode} from "lightrail-client/dist/model";
 import * as aws from "aws-sdk";
 import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
 import * as giftcardPurchaseParams from "./GiftcardPurchaseParams";
-import {GiftcardPurchaseParams} from "./GiftcardPurchaseParams";
 import {RECIPIENT_EMAIL} from "./RecipientEmail";
 import {TurnkeyConfig, validateTurnkeyConfig} from "../../utils/TurnkeyConfig";
 import * as kvsAccess from "../../utils/kvsAccess";
@@ -15,6 +14,8 @@ import {StripeAuth} from "../stripe/StripeAuth";
 import * as stripeAccess from "../stripe/stripeAccess";
 import {EmailGiftCardParams} from "./EmailGiftCardParams";
 import {StripeConfig} from "../stripe/StripeConfig";
+import {createChargeOnBehalfOfMerchant, retrieveTransfer, updateCharge} from "./stripeRequests";
+
 
 const ses = new aws.SES({region: 'us-west-2'});
 
@@ -50,17 +51,9 @@ router.route("/v1/turnkey/purchaseGiftcard")
         const params = giftcardPurchaseParams.setParamsFromRequest(evt);
         giftcardPurchaseParams.validateParams(params);
 
-        let charge: any;
-        try {
-            charge = await chargeCard(params, config.currency, merchantStripeConfig, lightrailStripeConfig);
-        } catch (err) {
-            console.log("Error. A stripe exception was thrown!");
-            throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "stripe charge failed.");
-        }
-        console.log("We're here. charge: " + JSON.stringify(charge));
-         if (!charge) {
-             throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "stripe charge failed.");
-         }
+        let charge = await createChargeOnBehalfOfMerchant(params, config.currency, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
+        let transfer = await retrieveTransfer(charge, lightrailStripeConfig.secretKey);
+        const paymentIdInMerchantStripeAccount = transfer.destination_payment;
 
         lightrail.configure({
             apiKey: jwt,
@@ -70,8 +63,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
 
         console.log("Attempting to create card.");
         const card: Card = await lightrail.cards.createCard({
-            userSuppliedId: charge.id,
-            // programId: config.publicConfig.programId, // todo - this needs to be updated in the lightrail js client library to support supplying a program.
+            userSuppliedId: paymentIdInMerchantStripeAccount,
             cardType: Card.CardType.GIFT_CARD,
             initialValue: params.initialValue,
             programId: config.programId,
@@ -84,22 +76,31 @@ router.route("/v1/turnkey/purchaseGiftcard")
                     email: params.recipientEmail
                 },
                 charge: {
-                    charge: charge
+                    charge: charge,
+                    transfer: transfer
                 }
             }
         });
 
-        const chargeUpdate = await updateCharge(charge, card, merchantStripeConfig, lightrailStripeConfig);
+        const chargeUpdate = await updateCharge(paymentIdInMerchantStripeAccount, card, merchantStripeConfig.access_token);
         console.log("ChargeUpdate: " + JSON.stringify(chargeUpdate));
 
         const fullcode: Fullcode = await lightrail.cards.getFullcode(card);
-        const emailResult = await emailGiftToRecipient({
-            fullcode: fullcode.code,
-            recipientEmail: params.recipientEmail,
-            message: params.message
-        }, config);
-        console.log("email result: " + emailResult.toString());
 
+        try {
+            const emailResult = await emailGiftToRecipient({
+                fullcode: fullcode.code,
+                recipientEmail: params.recipientEmail,
+                message: params.message
+            }, config);
+            console.log("email result: " + emailResult);
+        } catch (err) {
+
+        }
+
+        // working refund code
+        // const refund = await createRefund(charge, lightrailStripeConfig.secretKey);
+        // console.log("refund here: " + JSON.stringify(refund));
         // todo - doesn't seem like sendTemplatedEmail works with the most recent version of the aws-sdk. The function seems to exist but results in TypeError: ses.sendTemplatedEmail is not a function. Possible that this is a really bad permission error.
         // const eTemplateParams: SendTemplatedEmailRequest = {
         //     "Source": "tim@giftbit.com",
@@ -132,43 +133,6 @@ router.route("/v1/turnkey/purchaseGiftcard")
         };
     });
 
-async function chargeCard(requestParams: GiftcardPurchaseParams, currency: string, merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeConfig): Promise<any> {
-    const lightrailStripe = require("stripe")(lightrailStripeConfig.secretKey);
-
-    console.log(`Attempting to charge card on behalf of merchant.`);
-    // Charge the user's card:
-    return lightrailStripe.charges.create({
-        amount: requestParams.initialValue,
-        currency: currency,
-        description: "Charge for gift card.",
-        source: requestParams.stripeCardToken,
-        destination: {
-            account: merchantStripeConfig.stripe_user_id
-        }
-    });
-}
-
-async function updateCharge(charge: any, card: Card, merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeConfig): Promise<any> {
-
-    const lightrailStripe = require("stripe")(lightrailStripeConfig.secretKey);
-    const transfer = await lightrailStripe.transfers.retrieve(
-        charge.transfer
-    );
-    console.log("transfer: " + JSON.stringify(transfer));
-
-    const merchantStripe = require("stripe")(merchantStripeConfig.access_token);
-    console.log(`Attempting to update metadata.`);
-    // Charge the user's card:
-    return merchantStripe.charges.update(
-        transfer.destination_payment,
-        {
-            description: "Lightrail Gift Card",
-            metadata: {
-                cardId: card.cardId,
-            }
-        });
-}
-
 function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeConfig) {
     if (!merchantStripeConfig.access_token) {
         throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR, "merchant stripe config access_token cannot be null.");
@@ -186,7 +150,6 @@ async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: 
     let emailTemplate = RECIPIENT_EMAIL;
     emailTemplate = emailTemplate.replace("{{message}}", params.message);
     emailTemplate = emailTemplate.replace("{{fullcode}}", params.fullcode);
-
     emailTemplate = emailTemplate.replace("{{companyName}}", turnkeyConfig.companyName);
     emailTemplate = emailTemplate.replace("{{logo}}", turnkeyConfig.logo);
     emailTemplate = emailTemplate.replace("{{termsAndConditions}}", turnkeyConfig.termsAndConditions);
@@ -210,7 +173,7 @@ async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: 
     };
 
     console.log('===SENDING EMAIL===');
-    return ses.sendEmail(eParams);
+    return ses.sendEmail(eParams).promise();
     // console.log('===SENDING EMAIL===');
     // let email = await ses.sendEmail(eParams, function (err, data) {
     //     if (err) console.log(err);
