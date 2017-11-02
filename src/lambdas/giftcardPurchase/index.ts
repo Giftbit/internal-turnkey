@@ -1,15 +1,21 @@
 import "babel-polyfill";
 import * as cassava from "cassava";
+import {httpStatusCode, RestError} from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as lightrail from "lightrail-client";
 import {Card, Fullcode} from "lightrail-client/dist/model";
 import * as aws from "aws-sdk";
 import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
-import {TurnkeyPrivateConfig, validatePrivateTurnkeyConfig} from "../../utils/TurnkeyPrivateConfig";
 import * as giftcardPurchaseParams from "./GiftcardPurchaseParams";
-import {GiftcardPurchaseParams} from "./GiftcardPurchaseParams";
 import {RECIPIENT_EMAIL} from "./RecipientEmail";
-import {TurnkeyPublicConfig, validatePublicTurnkeyConfig} from "../../utils/TurnkeyPublicConfig";
+import {TurnkeyConfig, validateTurnkeyConfig} from "../../utils/TurnkeyConfig";
+import * as kvsAccess from "../../utils/kvsAccess";
+import {StripeAuth} from "../stripe/StripeAuth";
+import * as stripeAccess from "../stripe/stripeAccess";
+import {EmailGiftCardParams} from "./EmailGiftCardParams";
+import {StripeConfig} from "../stripe/StripeConfig";
+import {createChargeOnBehalfOfMerchant, retrieveTransfer, updateCharge} from "./stripeRequests";
+
 
 const ses = new aws.SES({region: 'us-west-2'});
 
@@ -25,51 +31,42 @@ router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, 
 router.route("/v1/turnkey/purchaseGiftcard")
     .method("POST")
     .handler(async evt => {
+        console.log("evt:" + JSON.stringify(evt));
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
         auth.requireIds("giftbitUserId");
 
-        // let newBadge = new AuthorizationBadge();
-        // newBadge.giftbitUserId = auth.giftbitUserId;
-        // newBadge.merchantId = auth.merchantId;
-        // newBadge.teamMemberId = auth.teamMemberId;
-        // newBadge.issuer = "CARD_PURCHASE_SERVICE";
-        // newBadge.scopes = ["lightrailV1:card", "lightrailV1:program:show"];
-        // const secret: string = (await authConfigPromise).secretkey;
-        // let jwt = newBadge.sign(secret);//newBadge.sign(secret);
-
         const secret: string = (await authConfigPromise).secretkey;
-        auth.scopes = ["lightrailV1:card", "lightrailV1:program:show", "lightrailV1:turnkeyprivate:show"]; // todo - scope for private turnkey config needs to be present
+        auth.scopes = ["lightrailV1:card", "lightrailV1:program:show", "lightrailV1:turnkeyconfigprivate:show"]; // todo - scope for private turnkey config needs to be present
         auth.issuer = "CARD_PURCHASE_SERVICE";
         let jwt = auth.sign(secret);
 
-        const turnkeyConfigPublic: TurnkeyPublicConfig = await turnkeyConfigUtil.getPublicConfig(jwt);
-        validatePublicTurnkeyConfig(turnkeyConfigPublic);
-        const turnkeyConfigPrivate: TurnkeyPrivateConfig = await turnkeyConfigUtil.getPrivateConfig(jwt);
-        validatePrivateTurnkeyConfig(turnkeyConfigPrivate);
+        const config: TurnkeyConfig = await turnkeyConfigUtil.getConfig(jwt);
+        console.log("Fetched config: " + JSON.stringify(config));
+        validateTurnkeyConfig(config);
+
+        const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(jwt, "stripeAuth");
+        const lightrailStripeConfig: StripeConfig = await stripeAccess.getStripeConfig();
+        validateStripeConfig(merchantStripeConfig, lightrailStripeConfig);
 
         const params = giftcardPurchaseParams.setParamsFromRequest(evt);
         giftcardPurchaseParams.validateParams(params);
-        const userSuppliedId = Date.now().toFixed(); // todo - consider using the id of the Stripe Charge object. This is unique.
 
+        let charge = await createChargeOnBehalfOfMerchant(params, config.currency, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
+        let transfer = await retrieveTransfer(charge, lightrailStripeConfig.secretKey);
+        const paymentIdInMerchantStripeAccount = transfer.destination_payment;
 
-
-        // Step 1
-        // fetch user's stripe token
-        // charge user's customer using CC card token passed in request
         lightrail.configure({
             apiKey: jwt,
             restRoot: "https://" + process.env["LIGHTRAIL_DOMAIN"] + "/v1/",
             logRequests: true
         });
 
-        // interesting, can't assign a contact to this card. Neither the sender, nor the recipient make sense to be added.
-        // -> recipient: poppy will need to apply the gift card to an account w/ recipientEmail, but the userSuppliedId must = poppy's rocketship customer id.
-        // -> sender: thomas may or may not have an account. Could lookup Thomas by email. If there is a contact, attach, otherwise, don't create one since you don't know thomas's rocketship customer id.
+        console.log("Attempting to create card.");
         const card: Card = await lightrail.cards.createCard({
-            userSuppliedId: userSuppliedId,
-            currency: params.currency,
+            userSuppliedId: paymentIdInMerchantStripeAccount,
             cardType: Card.CardType.GIFT_CARD,
             initialValue: params.initialValue,
+            programId: config.programId,
             metadata: {
                 sender: {
                     name: params.senderName,
@@ -77,16 +74,34 @@ router.route("/v1/turnkey/purchaseGiftcard")
                 },
                 recipient: {
                     email: params.recipientEmail
+                },
+                charge: {
+                    charge: charge,
+                    transfer: transfer
                 }
             }
         });
-        const fullcode: Fullcode = await lightrail.cards.getFullcode(card);
-        // Step 3
-        // email the recipient the fullcode
-        // email contains: company name and redemption url (Stretch: logo). These are from turnkey config.
-        emailGiftToRecipient(params, fullcode.code, turnkeyConfigPublic);
 
-        // todo - doesn't seem like sendTemplatedEmail works with the most reason version of the aws-sdk. The function seems to exist but results in TypeError: ses.sendTemplatedEmail is not a function. Possible that this is a really bad permission error.
+        const chargeUpdate = await updateCharge(paymentIdInMerchantStripeAccount, card, merchantStripeConfig.access_token);
+        console.log("ChargeUpdate: " + JSON.stringify(chargeUpdate));
+
+        const fullcode: Fullcode = await lightrail.cards.getFullcode(card);
+
+        try {
+            const emailResult = await emailGiftToRecipient({
+                fullcode: fullcode.code,
+                recipientEmail: params.recipientEmail,
+                message: params.message
+            }, config);
+            console.log("email result: " + emailResult);
+        } catch (err) {
+
+        }
+
+        // working refund code
+        // const refund = await createRefund(charge, lightrailStripeConfig.secretKey);
+        // console.log("refund here: " + JSON.stringify(refund));
+        // todo - doesn't seem like sendTemplatedEmail works with the most recent version of the aws-sdk. The function seems to exist but results in TypeError: ses.sendTemplatedEmail is not a function. Possible that this is a really bad permission error.
         // const eTemplateParams: SendTemplatedEmailRequest = {
         //     "Source": "tim@giftbit.com",
         //     "Template": "MyTemplate",
@@ -110,27 +125,39 @@ router.route("/v1/turnkey/purchaseGiftcard")
 
         return {
             body: {
-                domain: process.env["LIGHTRAIL_DOMAIN"],
-                jwt: jwt,
                 card: card,
                 fullcode: fullcode,
-                turnkeyConfig: turnkeyConfigPublic
+                charge: charge,
+                chargeUpdate: chargeUpdate,
             }
         };
     });
 
-async function emailGiftToRecipient(params: GiftcardPurchaseParams, fullcode: string, config: TurnkeyPublicConfig) {
+function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeConfig) {
+    if (!merchantStripeConfig.access_token) {
+        throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR, "merchant stripe config access_token cannot be null.");
+    }
+    if (!merchantStripeConfig.stripe_user_id) {
+        throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR, "merchant stripe config stripe_user_id cannot be null.");
+    }
+    if (!lightrailStripeConfig.secretKey) {
+        throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR, "lightrail stripe config secretKey cannot be null.");
+    }
+}
+
+
+async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: TurnkeyConfig): Promise<any> {
     let emailTemplate = RECIPIENT_EMAIL;
     emailTemplate = emailTemplate.replace("{{message}}", params.message);
-    emailTemplate = emailTemplate.replace("{{fullcode}}", fullcode);
-    emailTemplate = emailTemplate.replace("{{companyName}}", config.companyName);
-    emailTemplate = emailTemplate.replace("{{logo}}", config.logo);
-    emailTemplate = emailTemplate.replace("{{termsAndConditions}}", config.termsAndConditions);
+    emailTemplate = emailTemplate.replace("{{fullcode}}", params.fullcode);
+    emailTemplate = emailTemplate.replace("{{companyName}}", turnkeyConfig.companyName);
+    emailTemplate = emailTemplate.replace("{{logo}}", turnkeyConfig.logo);
+    emailTemplate = emailTemplate.replace("{{termsAndConditions}}", turnkeyConfig.termsAndConditions);
 
 
     const eParams = {
         Destination: {
-            ToAddresses: ["tim+123@giftbit.com"]
+            ToAddresses: [params.recipientEmail]
         },
         Message: {
             Body: {
@@ -139,28 +166,27 @@ async function emailGiftToRecipient(params: GiftcardPurchaseParams, fullcode: st
                 }
             },
             Subject: {
-                Data: "Email Subject!!!"
+                Data: `You have received a gift card for ${turnkeyConfig.companyName}`
             }
         },
         Source: "tim@giftbit.com"
     };
 
     console.log('===SENDING EMAIL===');
-    let email = await ses.sendEmail(eParams, function (err, data) {
-        if (err) console.log(err);
-        else {
-            console.log("===EMAIL SENT===");
-            console.log(data);
-
-            console.log("EMAIL CODE END");
-            console.log('EMAIL: ', email);
-        }
-    });
+    return ses.sendEmail(eParams).promise();
+    // console.log('===SENDING EMAIL===');
+    // let email = await ses.sendEmail(eParams, function (err, data) {
+    //     if (err) console.log(err);
+    //     else {
+    //         console.log("===EMAIL SENT===");
+    //         console.log(data);
+    //
+    //         console.log("EMAIL CODE END");
+    //         console.log('EMAIL: ', email);
+    //         return data
+    //     }
+    // });
 }
 
 //noinspection JSUnusedGlobalSymbols
 export const handler = router.getLambdaHandler();
-
-// async function createInactiveCard(jwt: string, initialValue: number): Promise<lightrail.model.Card> {
-//
-// }

@@ -24,7 +24,7 @@ Parameters:
     Description: Key of the role definitions secure config object in S3
   SecureConfigKeyStripe:
     Type: String
-    Description: Key of the Stripe secure config object in S3
+    Description: Key of the Stripe Connect secure config object in S3
   SecureConfigKmsArn:
     Type: String
     Description: Optional ARN of the KMS encrypting the S3 bucket
@@ -66,6 +66,7 @@ Resources:
           SECURE_CONFIG_BUCKET: !Ref SecureConfigBucket
           SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
           SECURE_CONFIG_KEY_ROLE_DEFINITIONS: !Ref SecureConfigKeyRoleDefinitions
+          SECURE_CONFIG_KEY_STRIPE: !Ref SecureConfigKeyStripe
       Policies:
         - Version: 2012-10-17
           Statement:
@@ -75,6 +76,7 @@ Resources:
               Resource:
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyJwt}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyRoleDefinitions}"
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyStripe}"
             - Effect: Allow
               Action:
                 - kms:Decrypt
