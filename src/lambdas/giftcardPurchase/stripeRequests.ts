@@ -19,7 +19,6 @@ export async function createCharge(requestParams: GiftcardPurchaseParams, curren
 
 export async function updateCharge(chargeId: string, params: any, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<any> {
     const merchantStripe = require("stripe")(lightrailStripeSecretKey);
-    console.log(`Attempting to update metadata.`);
     return merchantStripe.charges.update(
         chargeId,
         params, {
@@ -30,7 +29,6 @@ export async function updateCharge(chargeId: string, params: any, lightrailStrip
 
 export async function createRefund(charge: any, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Refund> {
     const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
-    console.log(`Attempting to create refund.`);
     return lightrailStripe.refunds.create({
         charge: charge.id,
         metadata: {"explanation": "The Lightrail Gift Card could not be issued due to technical reasons."}
