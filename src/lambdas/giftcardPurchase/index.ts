@@ -203,18 +203,6 @@ async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: 
 
     console.log('===SENDING EMAIL===');
     return ses.sendEmail(eParams).promise();
-    // console.log('===SENDING EMAIL===');
-    // let email = await ses.sendEmail(eParams, function (err, data) {
-    //     if (err) console.log(err);
-    //     else {
-    //         console.log("===EMAIL SENT===");
-    //         console.log(data);
-    //
-    //         console.log("EMAIL CODE END");
-    //         console.log('EMAIL: ', email);
-    //         return data
-    //     }
-    // });
 }
 
 //noinspection JSUnusedGlobalSymbols
