@@ -8,7 +8,11 @@ import * as aws from "aws-sdk";
 import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
 import * as giftcardPurchaseParams from "./GiftcardPurchaseParams";
 import {RECIPIENT_EMAIL} from "./RecipientEmail";
-import {TurnkeyConfig, validateTurnkeyConfig} from "../../utils/TurnkeyConfig";
+import {
+    REDEMPTION_LINK_FULLCODE_REPLACEMENT_STRING,
+    TurnkeyConfig,
+    validateTurnkeyConfig
+} from "../../utils/TurnkeyConfig";
 import * as kvsAccess from "../../utils/kvsAccess";
 import {StripeAuth} from "../stripe/StripeAuth";
 import * as stripeAccess from "../stripe/stripeAccess";
@@ -115,17 +119,21 @@ router.route("/v1/turnkey/purchaseGiftcard")
         }
 
         try {
+
+            const fullcode: Fullcode = await lightrail.cards.getFullcode(card);
+            console.log(`retrieved fullcode lastFour ${fullcode.code.substring(fullcode.code.length - 4)}`);
+
+            let redemptionLink = config.redemptionLink.replace(REDEMPTION_LINK_FULLCODE_REPLACEMENT_STRING, fullcode.code);
+
             const chargeUpdateParams = {
-                description: "Lightrail Gift Card",
+                description: `${config.companyName} gift card.<br/> Click <a href="${redemptionLink}">here</a> to send the gift to a different email.`,
                 metadata: {
                     cardId: card.cardId,
                 }
             };
+
             const chargeUpdate = updateCharge(charge.id, chargeUpdateParams, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
             console.log(`updated charge ${JSON.stringify(chargeUpdate)}`);
-
-            const fullcode: Fullcode = await lightrail.cards.getFullcode(card);
-            console.log(`retrieved fullcode lastFour ${fullcode.code.substring(fullcode.code.length - 4)}`);
 
             const emailResult = await emailGiftToRecipient({
                 fullcode: fullcode.code,
@@ -164,25 +172,24 @@ router.route("/v1/turnkey/purchaseGiftcard")
     });
 
 function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeConfig) {
-    if (!merchantStripeConfig.access_token) {
-        throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR, "merchant stripe config access_token cannot be null.");
+    if (!merchantStripeConfig || !merchantStripeConfig.stripe_user_id) {
+        throw new RestError(424, "merchant stripe config stripe_user_id cannot be null");
     }
-    if (!merchantStripeConfig.stripe_user_id) {
-        throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR, "merchant stripe config stripe_user_id cannot be null.");
-    }
-    if (!lightrailStripeConfig.secretKey) {
-        throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR, "lightrail stripe config secretKey cannot be null.");
+    if (!lightrailStripeConfig || !lightrailStripeConfig.secretKey) {
+        console.log("Lightrail stripe secretKey could not be loaded from s3 secure config.");
+        throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR, "internal server error");
     }
 }
 
 async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: TurnkeyConfig): Promise<any> {
     let emailTemplate = RECIPIENT_EMAIL;
+    let redemptionLink = turnkeyConfig.redemptionLink.replace(REDEMPTION_LINK_FULLCODE_REPLACEMENT_STRING, params.fullcode);
     emailTemplate = emailTemplate.replace("{{message}}", params.message);
     emailTemplate = emailTemplate.replace("{{fullcode}}", params.fullcode);
     emailTemplate = emailTemplate.replace("{{companyName}}", turnkeyConfig.companyName);
     emailTemplate = emailTemplate.replace("{{logo}}", turnkeyConfig.logo);
+    emailTemplate = emailTemplate.replace("{{redemptionLink}}", redemptionLink);
     emailTemplate = emailTemplate.replace("{{termsAndConditions}}", turnkeyConfig.termsAndConditions);
-
 
     const eParams = {
         Destination: {

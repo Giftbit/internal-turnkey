@@ -12,7 +12,7 @@ export const RECIPIENT_EMAIL = `
     {{message}}
 </p>
 <p>
-    Redeem it <a href="www.google.com" target="_blank">here</a>!
+    Redeem it <a href="{{redemptionLink}}" target="_blank">here</a>!
 </p>
 <p>{{fullcode}}</p>
 <p>{{termsAndConditions}}</p>

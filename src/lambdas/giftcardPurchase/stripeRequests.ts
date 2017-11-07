@@ -9,6 +9,7 @@ export async function createCharge(requestParams: GiftcardPurchaseParams, curren
         currency: currency,
         description: "Gift Card.",
         source: requestParams.stripeCardToken,
+        receipt_email: requestParams.senderEmail,
         metadata: {
             info: "The gift card issued from this charge was issued with a userSuppliedId of the charge id."
         }

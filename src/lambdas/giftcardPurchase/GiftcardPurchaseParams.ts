@@ -14,10 +14,10 @@ export interface GiftcardPurchaseParams {
 export function setParamsFromRequest(request: any): GiftcardPurchaseParams {
     return {
         initialValue: request.body.initialValue,
-        senderName: request.body.senderName,
-        senderEmail: request.body.senderEmail,
-        recipientEmail: request.body.recipientEmail,
         message: request.body.message,
+        recipientEmail: request.body.recipientEmail,
+        senderEmail: request.body.senderEmail,
+        senderName: request.body.senderName,
         stripeCardToken: request.body.stripeCardToken
     };
 }
@@ -38,13 +38,13 @@ export function validateParams(params: GiftcardPurchaseParams): void {
         console.log(`parameter recipientEmail failed validation. received ${params.recipientEmail}`);
         throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "parameter recipientEmail must be a valid email")
     }
-    if (!params.senderName) {
-        console.log(`parameter senderName failed validation. received ${params.senderName}`);
-        throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "parameter senderName must be set")
-    }
     if (!params.senderEmail) {
         console.log(`parameter senderEmail failed validation. received ${params.senderEmail}`);
         throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "parameter senderEmail must be set")
+    }
+    if (!params.senderName) {
+        console.log(`parameter senderName failed validation. received ${params.senderName}`);
+        throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "parameter senderName must be set")
     }
     if (!params.stripeCardToken) {
         console.log(`parameter stripeCardToken failed validation. received ${params.stripeCardToken}`);
