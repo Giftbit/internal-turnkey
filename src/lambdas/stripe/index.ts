@@ -4,6 +4,7 @@ import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as stripeAccess from "./stripeAccess";
 import * as kvsAccess from "../../utils/kvsAccess";
 import {StripeConnectState} from "./StripeConnectState";
+import {getConfig, TURNKEY_PUBLIC_CONFIG_KEY} from "../../utils/turnkeyConfigStore";
 
 export const router = new cassava.Router();
 
@@ -26,6 +27,9 @@ router.route("/v1/turnkey/stripe/callback")
         const auth = new giftbitRoutes.jwtauth.AuthorizationBadge(state.jwtPayload);
         const authToken = auth.sign((await authConfigPromise).secretkey);
         await kvsAccess.kvsPut(authToken, "stripeAuth", stripeAuth);
+        let turnkeyPublicConifg = await getConfig(authToken);
+        turnkeyPublicConifg.stripePublicKey = stripeAuth.stripe_publishable_key;
+        await kvsAccess.kvsPut(authToken, TURNKEY_PUBLIC_CONFIG_KEY, turnkeyPublicConifg);
 
         return {
             statusCode: 302,

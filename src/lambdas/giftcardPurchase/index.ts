@@ -10,7 +10,7 @@ import * as giftcardPurchaseParams from "./GiftcardPurchaseParams";
 import {RECIPIENT_EMAIL} from "./RecipientEmail";
 import {
     REDEMPTION_LINK_FULLCODE_REPLACEMENT_STRING,
-    TurnkeyConfig,
+    TurnkeyPublicConfig,
     validateTurnkeyConfig
 } from "../../utils/TurnkeyConfig";
 import * as kvsAccess from "../../utils/kvsAccess";
@@ -20,6 +20,8 @@ import {EmailGiftCardParams} from "./EmailGiftCardParams";
 import {StripeConfig} from "../stripe/StripeConfig";
 import {createCharge, createRefund, updateCharge} from "./stripeRequests";
 import {Charge} from "./Charge";
+import * as metrics from "giftbit-lambda-metricslib";
+import {errorNotificationWrapper, sendErrorNotificaiton} from "giftbit-cassava-routes/dist/sentry";
 
 const ses = new aws.SES({region: 'us-west-2'});
 
@@ -35,6 +37,7 @@ router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, 
 router.route("/v1/turnkey/purchaseGiftcard")
     .method("POST")
     .handler(async evt => {
+        metrics.histogram("turnkey.giftcardpurchase", 1, ["type:requested"]);
         console.log("evt:" + JSON.stringify(evt));
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
         auth.requireIds("giftbitUserId");
@@ -44,13 +47,18 @@ router.route("/v1/turnkey/purchaseGiftcard")
         auth.issuer = "CARD_PURCHASE_SERVICE";
         let jwt = auth.sign(secret);
 
+        sendErrorNotificaiton(new Error("Check out this sweet error."), {tags: {type: "test"}});
+        if (1) {
+            throw "this is a test error #123abc"
+        }
+
         lightrail.configure({
             apiKey: jwt,
             restRoot: "https://" + process.env["LIGHTRAIL_DOMAIN"] + "/v1/",
             logRequests: true
         });
 
-        const config: TurnkeyConfig = await turnkeyConfigUtil.getConfig(jwt);
+        const config: TurnkeyPublicConfig = await turnkeyConfigUtil.getConfig(jwt);
         console.log("Fetched config: " + JSON.stringify(config));
         validateTurnkeyConfig(config);
 
@@ -69,9 +77,13 @@ router.route("/v1/turnkey/purchaseGiftcard")
             console.log(`created charge ${JSON.stringify(charge)}`);
         } catch (err) {
             console.log(`error creating charge. err: ${err}`);
+            // metrics.histogram("turnkeyGiftcardPurchase-failedCharge", 1, ...["failedCharge"]);
+            // metrics.histogram("turnkeyGiftcardPurchase_failedCharge", 1);
             switch (err.type) {
                 case 'StripeCardError':
                     throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "charge failed");
+                case 'StripeInvalidRequestError':
+                    throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "invalid stripeCardToken");
                 case 'RateLimitError':
                     throw new RestError(httpStatusCode.serverError.GATEWAY_TIMEOUT, "dependent service is throwing errors");
                 default:
@@ -102,13 +114,17 @@ router.route("/v1/turnkey/purchaseGiftcard")
         } catch (err) {
             console.log(`cardError: err: ${err}`);
             console.log(`cardError: err: ${JSON.stringify(err)}`);
+            // metrics.histogram("turnkeyGiftcardPurchase", 1, "failedCardCreation");
+            // metrics.histogram("turnkeyGiftcardPurchase_failedCardCreation", 1);
             try {
                 const refund = await createRefund(charge, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
                 console.log(`refunded charge ${charge.id}. refund ${JSON.stringify(refund)}`)
             } catch (err) {
-                console.log("an issue occurred while issuing refund.")
+                console.log("an issue occurred while issuing refund.");
                 // this is a big issue. send sentry error
                 // todo
+                // metrics.histogram("turnkeyGiftcardPurchase_failedChargeRefund", 1);
+                // metrics.histogram("turnkeyGiftcardPurchase", 1, "failedRefund");
 
             }
             if (err.status == 400) {
@@ -123,7 +139,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
             const fullcode: Fullcode = await lightrail.cards.getFullcode(card);
             console.log(`retrieved fullcode lastFour ${fullcode.code.substring(fullcode.code.length - 4)}`);
 
-            let redemptionLink = config.redemptionLink.replace(REDEMPTION_LINK_FULLCODE_REPLACEMENT_STRING, fullcode.code);
+            let redemptionLink = config.claimLink.replace(REDEMPTION_LINK_FULLCODE_REPLACEMENT_STRING, fullcode.code);
 
             const chargeUpdateParams = {
                 description: `${config.companyName} gift card.<br/> Click <a href="${redemptionLink}">here</a> to send the gift to a different email.`,
@@ -143,13 +159,17 @@ router.route("/v1/turnkey/purchaseGiftcard")
             console.log(`sent email ${emailResult.messageId}`);
         } catch (err) {
             console.log(`err: ${err}`);
+            // metrics.histogram("turnkeyGiftcardPurchase", 1, "failedGiftSend");
+            // metrics.histogram("turnkeyGiftcardPurchase_failedToSendGiftEmail", 1);
             try {
                 const refund = await createRefund(charge, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
                 console.log(`refunded charge ${charge.id}. refund ${JSON.stringify(refund)}`)
             } catch (err) {
-                console.log("an issue occurred while issuing refund.")
+                console.log("an issue occurred while issuing refund.");
                 // this is a big issue. send sentry error
                 // todo
+                // metrics.histogram("turnkeyGiftcardPurchase_failedChargeRefund", 1);
+                // metrics.histogram("turnkeyGiftcardPurchase", 1, "failedRefund");
             }
 
             try {
@@ -158,11 +178,11 @@ router.route("/v1/turnkey/purchaseGiftcard")
             } catch (err) {
                 // this is a big issue. send sentry error
                 // todo
+                // metrics.histogram("turnkeyGiftcardPurchase_failedCardCancellation", 1);
+                // metrics.histogram("turnkeyGiftcardPurchase", 1, "failedCardCancellation");
             }
-
             throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR, "something unexpected happened during gift card purchase")
         }
-
         return {
             body: {
                 card: card,
@@ -181,14 +201,14 @@ function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeC
     }
 }
 
-async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: TurnkeyConfig): Promise<any> {
+async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: TurnkeyPublicConfig): Promise<any> {
     let emailTemplate = RECIPIENT_EMAIL;
-    let redemptionLink = turnkeyConfig.redemptionLink.replace(REDEMPTION_LINK_FULLCODE_REPLACEMENT_STRING, params.fullcode);
+    let redemptionLink = turnkeyConfig.claimLink.replace(REDEMPTION_LINK_FULLCODE_REPLACEMENT_STRING, params.fullcode);
     emailTemplate = emailTemplate.replace("{{message}}", params.message);
     emailTemplate = emailTemplate.replace("{{fullcode}}", params.fullcode);
     emailTemplate = emailTemplate.replace("{{companyName}}", turnkeyConfig.companyName);
     emailTemplate = emailTemplate.replace("{{logo}}", turnkeyConfig.logo);
-    emailTemplate = emailTemplate.replace("{{redemptionLink}}", redemptionLink);
+    emailTemplate = emailTemplate.replace("{{claimLink}}", redemptionLink);
     emailTemplate = emailTemplate.replace("{{termsAndConditions}}", turnkeyConfig.termsAndConditions);
 
     const eParams = {
@@ -213,4 +233,12 @@ async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: 
 }
 
 //noinspection JSUnusedGlobalSymbols
-export const handler = router.getLambdaHandler();
+export const handler = errorNotificationWrapper(
+    process.env["SECURE_CONFIG_BUCKET"],        // the S3 bucket with the Sentry API key
+    process.env["SECURE_CONFIG_KEY_SENTRY"],   // the S3 object key for the Sentry API key
+    router,
+    metrics.wrapLambdaHandler(
+        process.env["SECURE_CONFIG_BUCKET"],        // the S3 bucket with the DataDog API key
+        process.env["SECURE_CONFIG_KEY_DATADOG"],   // the S3 object key for the DataDog API key
+        router.getLambdaHandler()                   // the cassava handler
+    ));

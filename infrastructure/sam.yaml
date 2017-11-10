@@ -16,6 +16,12 @@ Parameters:
   SecureConfigBucket:
     Type: String
     Description: Name of the S3 bucket holding the JWT secure config
+  SecureConfigKeyDataDog:
+    Type: String
+    Description: Key of the DataDog API key secure config object in S3
+  SecureConfigKeySentry:
+    Type: String
+    Description: Key of the Sentry API key secure config object in S3
   SecureConfigKeyJwt:
     Type: String
     Description: Key of the JWT secure config object in S3
@@ -64,8 +70,10 @@ Resources:
         Variables:
           LIGHTRAIL_DOMAIN: !Ref LightrailDomain
           SECURE_CONFIG_BUCKET: !Ref SecureConfigBucket
+          SECURE_CONFIG_KEY_DATADOG: !Ref SecureConfigKeyDataDog
           SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
           SECURE_CONFIG_KEY_ROLE_DEFINITIONS: !Ref SecureConfigKeyRoleDefinitions
+          SECURE_CONFIG_KEY_SENTRY: !Ref SecureConfigKeySentry
           SECURE_CONFIG_KEY_STRIPE: !Ref SecureConfigKeyStripe
       Policies:
         - Version: 2012-10-17
@@ -74,6 +82,8 @@ Resources:
               Action:
                 - s3:GetObject
               Resource:
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyDataDog}"
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeySentry}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyJwt}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyRoleDefinitions}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyStripe}"
