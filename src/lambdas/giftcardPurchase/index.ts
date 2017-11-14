@@ -20,6 +20,7 @@ import * as metrics from "giftbit-lambda-metricslib";
 import {errorNotificationWrapper} from "giftbit-cassava-routes/dist/sentry";
 import {SendEmailResponse} from "aws-sdk/clients/ses";
 import {sendEmail} from "../../utils/emailUtils";
+import {CreateCardParams} from "lightrail-client/dist/params";
 import uuid = require("uuid");
 import SES = require("aws-sdk/clients/ses");
 
@@ -85,7 +86,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
         }
 
         try {
-            card = await lightrail.cards.createCard({
+            const cardParams: CreateCardParams = {
                 userSuppliedId: charge.id,
                 cardType: Card.CardType.GIFT_CARD,
                 initialValue: params.initialValue,
@@ -102,12 +103,14 @@ router.route("/v1/turnkey/purchaseGiftcard")
                         chargeId: charge.id,
                     }
                 }
-            });
-            console.log(`created card ${JSON.stringify(card)}`);
+            };
+            console.log(`Creating card with params ${JSON.stringify(cardParams)}.`);
+            card = await lightrail.cards.createCard(cardParams);
+            console.log(`Created card ${JSON.stringify(card)}.`);
         } catch (err) {
-            console.log(`An error occurred during card creation. Error: ${JSON.stringify(err)}`);
+            console.log(`An error occurred during card creation. Error: ${JSON.stringify(err)}.`);
             const refund = await createRefund(charge.id, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
-            console.log(`Refunded charge ${charge.id}. Refund: ${JSON.stringify(refund)}`);
+            console.log(`Refunded charge ${charge.id}. Refund: ${JSON.stringify(refund)}.`);
 
             if (err.status == 400) {
                 throw new RestError(httpStatusCode.clientError.BAD_REQUEST, err.body.message)
@@ -125,13 +128,13 @@ router.route("/v1/turnkey/purchaseGiftcard")
                 recipientEmail: params.recipientEmail,
                 message: params.message
             }, config);
-            console.log(`sent email ${emailResult.MessageId}`);
+            console.log(`Email sent. MessageId: ${emailResult.MessageId}.`);
         } catch (err) {
-            console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}`);
+            console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
             const refund = await createRefund(charge.id, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
-            console.log(`refunded charge ${charge.id}. refund: ${JSON.stringify(refund)}`);
+            console.log(`Refunded charge ${charge.id}. Refund: ${JSON.stringify(refund)}.`);
             const cancel = await lightrail.cards.cancelCard(card, card.cardId + "-cancel");
-            console.log(`cancelled card ${card.cardId}. cancel response: ${cancel}`);
+            console.log(`Cancelled card ${card.cardId}. Cancel response: ${cancel}.`);
         }
         metrics.histogram("turnkey.giftcardpurchase", 1, ["type:succeeded"]);
         metrics.flush();

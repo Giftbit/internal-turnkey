@@ -7,6 +7,7 @@ export async function createCharge(params: StripeCreateChargeParams, lightrailSt
     const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
     params.description = "Gift Card";
     params.metadata = {info: "The gift card issued from this charge was issued with a userSuppliedId of the charge id."};
+    console.log(`Creating charge ${JSON.stringify(params)}.`);
     return lightrailStripe.charges.create(params, {
         stripe_account: merchantStripeAccountId,
     });
@@ -14,6 +15,7 @@ export async function createCharge(params: StripeCreateChargeParams, lightrailSt
 
 export async function updateCharge(chargeId: string, params: StripeUpdateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<any> {
     const merchantStripe = require("stripe")(lightrailStripeSecretKey);
+    console.log(`Updating charge ${JSON.stringify(params)}.`);
     return merchantStripe.charges.update(
         chargeId,
         params, {
@@ -24,6 +26,7 @@ export async function updateCharge(chargeId: string, params: StripeUpdateChargeP
 
 export async function createRefund(chargeId: string, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Refund> {
     const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
+    console.log(`Creating refund for charge ${chargeId}.`);
     return lightrailStripe.refunds.create({
         charge: chargeId,
         metadata: {"explanation": "The Lightrail Gift Card could not be issued due to an unexpected error."}
