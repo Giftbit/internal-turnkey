@@ -1,24 +1,18 @@
-import {GiftcardPurchaseParams} from "./GiftcardPurchaseParams";
 import {Charge} from "./Charge";
 import {Refund} from "./Refund";
+import {StripeCreateChargeParams} from "./StripeCreateChargeParams";
+import {StripeUpdateChargeParams} from "./StripeUpdateChargeParams";
 
-export async function createCharge(requestParams: GiftcardPurchaseParams, currency: string, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Charge> {
+export async function createCharge(params: StripeCreateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Charge> {
     const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
-    return lightrailStripe.charges.create({
-        amount: requestParams.initialValue,
-        currency: currency,
-        description: "Gift Card.",
-        source: requestParams.stripeCardToken,
-        receipt_email: requestParams.senderEmail,
-        metadata: {
-            info: "The gift card issued from this charge was issued with a userSuppliedId of the charge id."
-        }
-    }, {
+    params.description = "Gift Card";
+    params.metadata = {info: "The gift card issued from this charge was issued with a userSuppliedId of the charge id."};
+    return lightrailStripe.charges.create(params, {
         stripe_account: merchantStripeAccountId,
     });
 }
 
-export async function updateCharge(chargeId: string, params: any, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<any> {
+export async function updateCharge(chargeId: string, params: StripeUpdateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<any> {
     const merchantStripe = require("stripe")(lightrailStripeSecretKey);
     return merchantStripe.charges.update(
         chargeId,
@@ -28,11 +22,11 @@ export async function updateCharge(chargeId: string, params: any, lightrailStrip
     );
 }
 
-export async function createRefund(charge: any, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Refund> {
+export async function createRefund(chargeId: string, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Refund> {
     const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
     return lightrailStripe.refunds.create({
-        charge: charge.id,
-        metadata: {"explanation": "The Lightrail Gift Card could not be issued due to technical reasons."}
+        charge: chargeId,
+        metadata: {"explanation": "The Lightrail Gift Card could not be issued due to an unexpected error."}
     }, {
         stripe_account: merchantStripeAccountId
     });

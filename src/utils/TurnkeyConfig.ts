@@ -1,9 +1,12 @@
 import {RestError} from "cassava";
+import {isValidEmailAddress} from "./emailUtils";
+
 export interface TurnkeyPublicConfig {
     claimLink: string;
     companyName: string;
     copyright: string;
     currency: string;
+    giftEmailReplyToAddress: string;
     linkToPrivacy: string;
     linkToTerms: string;
     logo: string;
@@ -14,6 +17,12 @@ export interface TurnkeyPublicConfig {
 
 export const FULLCODE_REPLACMENT_STRING = "{{fullcode}}";
 
+/**
+ * Validates all config parameters are correctly set.
+ * The reason for this is we want the gift card purchase service to stop upfront in the event there is a problem with config.
+ * This is due to the multiple transactions involved (ie Stripe and Lightrail). It's better to avoid a refund / card cancellation if possible.
+ * @param config
+ */
 export function validateTurnkeyConfig(config: TurnkeyPublicConfig): void {
     if (!config) {
         console.log("turnkey config cannot be null");
@@ -34,6 +43,10 @@ export function validateTurnkeyConfig(config: TurnkeyPublicConfig): void {
     if (!config.currency) {
         console.log("turnkey config currency cannot be null");
         throw new RestError(424, "config currency was not set");
+    }
+    if (!config.giftEmailReplyToAddress || !isValidEmailAddress(config.giftEmailReplyToAddress)) {
+        console.log("turnkey config giftEmailReplyToAddress cannot be null");
+        throw new RestError(424, "config giftEmailReplyToAddress must be a valid email");
     }
     if (!config.linkToPrivacy) {
         console.log("turnkey config linkToPrivacy cannot be null");
