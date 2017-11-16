@@ -55,11 +55,15 @@ router.route("/v1/turnkey/stripe")
         if (stripeAuth) {
             const account = await stripeAccess.fetchStripeAccount(stripeAuth);
             if (account) {
+                const location = `https://${process.env["LIGHTRAIL_WEBAPP_DOMAIN"]}/app/`;
                 return {
                     statusCode: 302,
-                    body: null,
+                    body: {
+                        location,
+                        message: "already connected"
+                    },
                     headers: {
-                        Location: `https://${process.env["LIGHTRAIL_WEBAPP_DOMAIN"]}/app/`
+                        Location: location
                     }
                 };
             }
