@@ -1,4 +1,4 @@
-import {httpStatusCode, RestError} from "cassava";
+import {httpStatusCode, RestError, RouterEvent} from "cassava";
 import {isValidEmailAddress} from "../../utils/emailUtils";
 
 export interface GiftcardPurchaseParams {
@@ -10,7 +10,7 @@ export interface GiftcardPurchaseParams {
     stripeCardToken: string;
 }
 
-export function setParamsFromRequest(request: any): GiftcardPurchaseParams {
+export function setParamsFromRequest(request: RouterEvent): GiftcardPurchaseParams {
     return {
         initialValue: request.body.initialValue,
         message: request.body.message,

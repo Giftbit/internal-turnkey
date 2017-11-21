@@ -21,6 +21,7 @@ import {errorNotificationWrapper} from "giftbit-cassava-routes/dist/sentry";
 import {SendEmailResponse} from "aws-sdk/clients/ses";
 import {sendEmail} from "../../utils/emailUtils";
 import {CreateCardParams} from "lightrail-client/dist/params";
+import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 import uuid = require("uuid");
 import SES = require("aws-sdk/clients/ses");
 
@@ -31,7 +32,7 @@ router.route(new cassava.routes.LoggingRoute());
 
 const authConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_JWT");
 const roleDefinitionsPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS");
-router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise));
+router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_WEBAPP_DOMAIN"]}/v1/storage/jwtSecret/`, Promise.resolve({assumeToken: "secret"})));
 
 router.route("/v1/turnkey/purchaseGiftcard")
     .method("POST")
@@ -41,7 +42,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
         metrics.flush();
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
         auth.requireIds("giftbitUserId");
-        // auth.requireScopes("lightrailV1:externalPurchaseGiftCard"); // todo - this needs to be added back in once the shopper token is being created.
+        auth.requireScopes("lightrailV1:purchaseGiftcard");
         const jwt: string = await getJwtForLightrailRequests(auth);
 
         lightrail.configure({
@@ -75,13 +76,13 @@ router.route("/v1/turnkey/purchaseGiftcard")
             console.log(`error creating charge. err: ${err}`);
             switch (err.type) {
                 case 'StripeCardError':
-                    throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "charge failed");
+                    throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge card in Stripe.", "ChargeFailed");
                 case 'StripeInvalidRequestError':
-                    throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "invalid stripeCardToken");
+                    throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "The stripeCardToken was invalid.", "StripeInvalidRequestError");
                 case 'RateLimitError':
-                    throw new RestError(httpStatusCode.clientError.TOO_MANY_REQUESTS, `service was rate limited by dependent service`);
+                    throw new GiftbitRestError(httpStatusCode.clientError.TOO_MANY_REQUESTS, `Service was rate limited by dependent service.`, "DependentServiceRateLimited");
                 default:
-                    throw new Error(`an unexpected error occurred while attempting to charge card. error ${err}`);
+                    throw new Error(`An unexpected error occurred while attempting to charge card. error ${err}`);
             }
         }
 
@@ -115,7 +116,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
             if (err.status == 400) {
                 throw new RestError(httpStatusCode.clientError.BAD_REQUEST, err.body.message)
             } else {
-                throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR, "something unexpected occurred during card creation")
+                throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR)
             }
         }
 
@@ -147,11 +148,11 @@ router.route("/v1/turnkey/purchaseGiftcard")
 
 function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeConfig) {
     if (!merchantStripeConfig || !merchantStripeConfig.stripe_user_id) {
-        throw new RestError(424, "merchant stripe config stripe_user_id cannot be null");
+        throw new GiftbitRestError(424, "Merchant stripe config stripe_user_id must be set.", "MissingStripeUserId");
     }
     if (!lightrailStripeConfig || !lightrailStripeConfig.secretKey) {
         console.log("Lightrail stripe secretKey could not be loaded from s3 secure config.");
-        throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR, "internal server error");
+        throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR);
     }
 }
 
