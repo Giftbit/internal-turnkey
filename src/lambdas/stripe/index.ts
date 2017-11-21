@@ -55,15 +55,10 @@ router.route("/v1/turnkey/stripe")
         if (stripeAuth) {
             const account = await stripeAccess.fetchStripeAccount(stripeAuth);
             if (account) {
-                const location = `https://${process.env["LIGHTRAIL_WEBAPP_DOMAIN"]}/app/`;
                 return {
-                    statusCode: 302,
                     body: {
-                        location,
-                        message: "already connected"
-                    },
-                    headers: {
-                        Location: location
+                        connected: true,
+                        location: `https://${process.env["LIGHTRAIL_WEBAPP_DOMAIN"]}/app/`
                     }
                 };
             }
@@ -72,15 +67,11 @@ router.route("/v1/turnkey/stripe")
         const stripeConnectState = await StripeConnectState.create(auth);
         const stripeCallbackLocation = `https://${process.env["LIGHTRAIL_WEBAPP_DOMAIN"]}/v1/turnkey/stripe/callback`;
         const stripeConfig = await stripeAccess.getStripeConfig();
-        const location = `https://connect.stripe.com/oauth/authorize?response_type=code&scope=read_write&client_id=${encodeURIComponent(stripeConfig.clientId)}&redirect_uri=${encodeURIComponent(stripeCallbackLocation)}&state=${encodeURIComponent(stripeConnectState.uuid)}`;
 
         return {
-            statusCode: 302,
             body: {
-                location
-            },
-            headers: {
-                Location: location
+                connected: false,
+                location: `https://connect.stripe.com/oauth/authorize?response_type=code&scope=read_write&client_id=${encodeURIComponent(stripeConfig.clientId)}&redirect_uri=${encodeURIComponent(stripeCallbackLocation)}&state=${encodeURIComponent(stripeConnectState.uuid)}`
             }
         };
     });
