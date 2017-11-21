@@ -1,5 +1,5 @@
-import {RestError} from "cassava";
 import {isValidEmailAddress} from "./emailUtils";
+import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 
 export interface TurnkeyPublicConfig {
     claimLink: string;
@@ -26,50 +26,50 @@ export const FULLCODE_REPLACMENT_STRING = "{{fullcode}}";
 export function validateTurnkeyConfig(config: TurnkeyPublicConfig): void {
     if (!config) {
         console.log("turnkey config cannot be null");
-        throw new RestError(424, "config was not set");
+        throw new GiftbitRestError(424, "Config was not set.", "ConfigMissing");
     }
     if (!config.claimLink || !config.claimLink.includes(FULLCODE_REPLACMENT_STRING)) {
         console.log("turnkey config claimLink must contain {{fullcode}} for replacement.");
-        throw new RestError(424, "config claimLink must be set and contain {{fullcode}} for replacement");
+        throw new GiftbitRestError(424, "Config claimLink must be set and contain {{fullcode}} for replacement.", "InvalidClaimLink");
     }
     if (!config.companyName) {
         console.log("turnkey config companyName cannot be null");
-        throw new RestError(424, "config companyName was not set");
+        throw new GiftbitRestError(424, "Config companyName was not set.", "MissingCompanyName");
     }
     if (!config.copyright) {
         console.log("turnkey config copyright cannot be null");
-        throw new RestError(424, "config copyright was not set");
+        throw new GiftbitRestError(424, "Config copyright was not set.", "MissingCopyright");
     }
     if (!config.currency) {
         console.log("turnkey config currency cannot be null");
-        throw new RestError(424, "config currency was not set");
+        throw new GiftbitRestError(424, "Config currency was not set.", "MissingCurrency");
     }
     if (!config.giftEmailReplyToAddress || !isValidEmailAddress(config.giftEmailReplyToAddress)) {
         console.log("turnkey config giftEmailReplyToAddress cannot be null");
-        throw new RestError(424, "config giftEmailReplyToAddress must be a valid email");
+        throw new GiftbitRestError(424, "Config giftEmailReplyToAddress must be a valid email.", "InvalidGiftEmailReplyToAddress");
     }
     if (!config.linkToPrivacy) {
         console.log("turnkey config linkToPrivacy cannot be null");
-        throw new RestError(424, "config linkToPrivacy was not set");
+        throw new GiftbitRestError(424, "Config linkToPrivacy was not set.", "MissingLinkToPrivacy");
     }
     if (!config.linkToTerms) {
         console.log("turnkey config linkToTerms cannot be null");
-        throw new RestError(424, "config linkToTerms was not set");
+        throw new GiftbitRestError(424, "Config linkToTerms was not set.", "MissingLinkToTerms");
     }
     if (!config.logo) {
         console.log("turnkey config logo cannot be null");
-        throw new RestError(424, "config logo was not set");
+        throw new GiftbitRestError(424, "Config logo was not set.", "MissingLogo");
     }
     if (!config.programId) {
         console.log("turnkey config programId cannot be null");
-        throw new RestError(424, "config programId was not set");
+        throw new GiftbitRestError(424, "Config programId was not set.", "MissingProgramId");
     }
     if (!config.stripePublicKey) {
         console.log("turnkey config stripePublicKey cannot be null");
-        throw new RestError(424, "config stripePublicKey was not set");
+        throw new GiftbitRestError(424, "Config stripePublicKey was not set.", "MissingStripePublicKey");
     }
     if (!config.termsAndConditions) {
         console.log("turnkey config termsAndConditions cannot be null");
-        throw new RestError(424, "config termsAndConditions was not set");
+        throw new GiftbitRestError(424, "Config termsAndConditions was not set.", "MissingTermsAndConditions");
     }
 }
