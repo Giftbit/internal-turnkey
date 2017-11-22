@@ -5,6 +5,7 @@ import * as stripeAccess from "./stripeAccess";
 import * as kvsAccess from "../../utils/kvsAccess";
 import {StripeConnectState} from "./StripeConnectState";
 import {getConfig, TURNKEY_PUBLIC_CONFIG_KEY} from "../../utils/turnkeyConfigStore";
+import {TurnkeyPublicConfig} from "../../utils/TurnkeyConfig";
 
 export const router = new cassava.Router();
 
@@ -29,7 +30,7 @@ router.route("/v1/turnkey/stripe/callback")
         await kvsAccess.kvsPut(authToken, "stripeAuth", stripeAuth);
 
         // Store public config.
-        const turnkeyPublicConfig = await getConfig(authToken);
+        const turnkeyPublicConfig: any = await getConfig(authToken) || {} as Partial<TurnkeyPublicConfig>;
         turnkeyPublicConfig.stripePublicKey = stripeAuth.stripe_publishable_key;
         await kvsAccess.kvsPut(authToken, TURNKEY_PUBLIC_CONFIG_KEY, turnkeyPublicConfig);
 
@@ -93,7 +94,7 @@ router.route("/v1/turnkey/stripe")
 
         return {
             body: {
-                success: true
+                connected: false
             }
         };
     });
