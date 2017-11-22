@@ -27,9 +27,11 @@ router.route("/v1/turnkey/stripe/callback")
         const auth = new giftbitRoutes.jwtauth.AuthorizationBadge(state.jwtPayload);
         const authToken = auth.sign((await authConfigPromise).secretkey);
         await kvsAccess.kvsPut(authToken, "stripeAuth", stripeAuth);
-        let turnkeyPublicConifg = await getConfig(authToken);
-        turnkeyPublicConifg.stripePublicKey = stripeAuth.stripe_publishable_key;
-        await kvsAccess.kvsPut(authToken, TURNKEY_PUBLIC_CONFIG_KEY, turnkeyPublicConifg);
+
+        // Store public config.
+        const turnkeyPublicConfig = await getConfig(authToken);
+        turnkeyPublicConfig.stripePublicKey = stripeAuth.stripe_publishable_key;
+        await kvsAccess.kvsPut(authToken, TURNKEY_PUBLIC_CONFIG_KEY, turnkeyPublicConfig);
 
         return {
             statusCode: 302,
