@@ -4,7 +4,6 @@ import {httpStatusCode, RestError} from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as lightrail from "lightrail-client";
 import {Card} from "lightrail-client/dist/model";
-import * as aws from "aws-sdk";
 import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
 import * as giftcardPurchaseParams from "./GiftcardPurchaseParams";
 import {RECIPIENT_EMAIL} from "./RecipientEmail";
