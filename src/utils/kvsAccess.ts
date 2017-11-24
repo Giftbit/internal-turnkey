@@ -6,11 +6,15 @@ export async function kvsDelete(token: string, key: string): Promise<void> {
         .set("Content-Type", "application/json");
 }
 
-export async function kvsGet(token: string, key: string): Promise<any> {
-    const resp = await superagent.get(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v1/storage/${key}`)
+export async function kvsGet(token: string, key: string, authorizeAs?: string): Promise<any> {
+
+    let request = superagent("GET", `https://${process.env["LIGHTRAIL_DOMAIN"]}/v1/storage/${key}`)
         .set("Authorization", `Bearer ${token}`)
         .ok(r => r.ok || r.status === 404);
-
+    if (authorizeAs) {
+        request.set("AuthorizeAs", authorizeAs)
+    }
+    const resp = await request.query({});
     if (resp.ok) {
         return resp.body;
     }

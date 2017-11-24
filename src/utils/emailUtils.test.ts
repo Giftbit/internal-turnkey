@@ -36,10 +36,6 @@ describe("test email validator", () => {
         {email: "email.@domain.com", isValid: false, message: "Trailing dot in address is not allowed"},
         {email: "email@domain", isValid: false, message: "Missing top level domain (.com/.net/.org/etc)"},
         {email: "email@domain..com", isValid: false, message: "Multiple dot in the domain portion is invalid"},
-        // todo - these are valid tests but regex was loosened due to an issue with old regex
-        // {email: "email@123.123.123.123", isValid: true, message: "Domain is valid IP address"},
-        // {email: "あいうえお@domain.com", isValid: false, message: "Unicode char as address"},
-        // {email: "email@-domain.com", isValid: false, message: "Leading dash in front of domain is invalid"},
     ];
 
     for (const testCase of testCases) {
