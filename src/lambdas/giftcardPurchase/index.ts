@@ -6,22 +6,22 @@ import * as lightrail from "lightrail-client";
 import {Card} from "lightrail-client/dist/model";
 import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
 import * as giftcardPurchaseParams from "./GiftcardPurchaseParams";
+import {GiftcardPurchaseParams} from "./GiftcardPurchaseParams";
 import {RECIPIENT_EMAIL} from "./RecipientEmail";
 import {FULLCODE_REPLACMENT_STRING, TurnkeyPublicConfig, validateTurnkeyConfig} from "../../utils/TurnkeyConfig";
 import * as kvsAccess from "../../utils/kvsAccess";
-import {StripeAuth} from "../stripe/StripeAuth";
 import * as stripeAccess from "../stripe/stripeAccess";
 import {EmailGiftCardParams} from "./EmailGiftCardParams";
-import {StripeConfig} from "../stripe/StripeConfig";
 import {createCharge, createRefund, updateCharge} from "./stripeRequests";
-import {Charge} from "./Charge";
 import * as metrics from "giftbit-lambda-metricslib";
 import {errorNotificationWrapper} from "giftbit-cassava-routes/dist/sentry";
 import {SendEmailResponse} from "aws-sdk/clients/ses";
 import {sendEmail} from "../../utils/emailUtils";
 import {CreateCardParams} from "lightrail-client/dist/params";
 import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
-import uuid = require("uuid");
+import {Charge} from "../../utils/stripedtos/Charge";
+import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
+import {StripeConfig} from "../../utils/stripedtos/StripeConfig";
 
 export const router = new cassava.Router();
 
@@ -32,7 +32,6 @@ const roleDefinitionsPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<an
 const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN");
 const assumeGiftcardPurchaseToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN");
 router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}/v1/storage/jwtSecret`, assumeGetSharedSecretToken));
-
 router.route("/v1/turnkey/purchaseGiftcard")
     .method("POST")
     .handler(async evt => {
@@ -63,51 +62,16 @@ router.route("/v1/turnkey/purchaseGiftcard")
         const params = giftcardPurchaseParams.setParamsFromRequest(evt);
         giftcardPurchaseParams.validateParams(params);
 
-        let charge: Charge;
+        let charge: Charge = await createCharge({
+            amount: params.initialValue,
+            currency: config.currency,
+            source: params.stripeCardToken
+        }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
+        console.log(`Created charge ${JSON.stringify(charge)}`);
+
         let card: Card;
-
         try {
-            charge = await createCharge({
-                amount: params.initialValue,
-                currency: config.currency,
-                source: params.stripeCardToken
-            }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
-            console.log(`created charge ${JSON.stringify(charge)}`);
-        } catch (err) {
-            console.log(`error creating charge. err: ${err}`);
-            switch (err.type) {
-                case 'StripeCardError':
-                    throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge card in Stripe.", "ChargeFailed");
-                case 'StripeInvalidRequestError':
-                    throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "The stripeCardToken was invalid.", "StripeInvalidRequestError");
-                case 'RateLimitError':
-                    throw new GiftbitRestError(httpStatusCode.clientError.TOO_MANY_REQUESTS, `Service was rate limited by dependent service.`, "DependentServiceRateLimited");
-                default:
-                    throw new Error(`An unexpected error occurred while attempting to charge card. error ${err}`);
-            }
-        }
-
-        try {
-            const cardParams: CreateCardParams = {
-                userSuppliedId: charge.id,
-                cardType: Card.CardType.GIFT_CARD,
-                initialValue: params.initialValue,
-                programId: config.programId,
-                metadata: {
-                    sender: {
-                        name: params.senderName,
-                        email: params.senderEmail,
-                    },
-                    recipient: {
-                        email: params.recipientEmail
-                    },
-                    charge: {
-                        chargeId: charge.id,
-                    }
-                }
-            };
-            console.log(`Creating card with params ${JSON.stringify(cardParams)}.`);
-            card = await lightrail.cards.createCard(cardParams);
+            card = await createCard(charge, params, config);
             console.log(`Created card ${JSON.stringify(card)}.`);
         } catch (err) {
             console.log(`An error occurred during card creation. Error: ${JSON.stringify(err)}.`);
@@ -146,6 +110,29 @@ router.route("/v1/turnkey/purchaseGiftcard")
             }
         };
     });
+
+async function createCard(charge, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig): Promise<Card> {
+    const cardParams: CreateCardParams = {
+        userSuppliedId: charge.id,
+        cardType: Card.CardType.GIFT_CARD,
+        initialValue: params.initialValue,
+        programId: config.programId,
+        metadata: {
+            sender: {
+                name: params.senderName,
+                email: params.senderEmail,
+            },
+            recipient: {
+                email: params.recipientEmail
+            },
+            charge: {
+                chargeId: charge.id,
+            }
+        }
+    };
+    console.log(`Creating card with params ${JSON.stringify(cardParams)}.`);
+    return await lightrail.cards.createCard(cardParams);
+}
 
 function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeConfig) {
     if (!merchantStripeConfig || !merchantStripeConfig.stripe_user_id) {
@@ -188,12 +175,3 @@ export const handler = errorNotificationWrapper(
         process.env["SECURE_CONFIG_KEY_DATADOG"],   // the S3 object key for the DataDog API key
         router.getLambdaHandler()                   // the cassava handler
     ));
-
-async function getValidFullApiKeyForUser(auth: giftbitRoutes.jwtauth.AuthorizationBadge): Promise<string> {
-    const secret: string = (await authConfigPromise).secretkey;
-    auth.scopes = ["lightrailV1:card", "lightrailV1:stripeConnect:read"];
-    auth.issuer = "GIFTCARD_PURCHASE_SERVICE";
-    auth.parentUniqueIdentifier = auth.uniqueIdentifier;
-    auth.uniqueIdentifier = "badge-" + uuid.v4().replace(/\-/gi, "");
-    return auth.sign(secret);
-}

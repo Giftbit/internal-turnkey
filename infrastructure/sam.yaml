@@ -9,9 +9,10 @@ Parameters:
     Type: String
     Description: The domain of the Lightrail REST API
     AllowedPattern: (\w+\.)+\w{3}
-  LightrailExternalFromEmailAddress:
+  EmailDomainName:
     Type: String
-    Description: Email address to be used for outgoing emails
+    Description: The lightrail email domain.
+    Default: ""
   LightrailWebappDomain:
     Type: String
     Description: The domain of the Lightrail web app
@@ -86,7 +87,7 @@ Resources:
           SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN: !Ref SecureConfigKeyAssumeStorageScopeToken
           SECURE_CONFIG_KEY_SENTRY: !Ref SecureConfigKeySentry
           SECURE_CONFIG_KEY_STRIPE: !Ref SecureConfigKeyStripe
-          OUTGOING_EMAIL_FROM_ADDRESS: !Ref LightrailExternalFromEmailAddress
+          LIGHTRAIL_EMAIL_DOMAIN_NAME: !Ref EmailDomainName
       Policies:
         - Version: 2012-10-17
           Statement:
@@ -117,10 +118,10 @@ Resources:
                 - ses:SendEmail
                 - ses:SendRawEmail
               Resource: "*"
-              Condition:
-                StringEquals:
-                 "ses:FromAddress":
-                    !Ref LightrailExternalFromEmailAddress
+#              Condition:
+#                StringEquals:
+#                 "ses:FromAddress":
+#                  !Sub "*@${EmailDomainName}"
       Tags:
         ShortName: GiftcardPurchaseFunction
         Service: Turnkey

@@ -13,7 +13,7 @@ BUILD_ARTIFACT_BUCKET="dev-lightrailturnkey-mnw-deploymentartifactbucket-eq5kkbd
 # Parameter values for the sam template.  see: `aws cloudformation deploy help`
 PARAMETER_OVERRIDES="--parameter-overrides"
 PARAMETER_OVERRIDES+=" LightrailDomain=api.lightraildev.net"
-PARAMETER_OVERRIDES+=" LightrailExternalFromEmailAddress=notifications@lightraildev.net"
+PARAMETER_OVERRIDES+=" EmailDomainName=lightraildev.net"
 PARAMETER_OVERRIDES+=" LightrailWebappDomain=www.lightraildev.net"
 PARAMETER_OVERRIDES+=" SecureConfigBucket=dev-lightrailsecureconfig-1q7bltwyiihpq-bucket-id162gq711cc"
 PARAMETER_OVERRIDES+=" SecureConfigKeyAssumeGiftcardPurchaseToken=assumeGiftcardPurchaseToken.json"
