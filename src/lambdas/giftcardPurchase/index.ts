@@ -1,6 +1,6 @@
 import "babel-polyfill";
 import * as cassava from "cassava";
-import {httpStatusCode, RestError} from "cassava";
+import {httpStatusCode, RestError, RouterEvent} from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as lightrail from "lightrail-client";
 import {Card} from "lightrail-client/dist/model";
@@ -12,7 +12,7 @@ import {FULLCODE_REPLACMENT_STRING, TurnkeyPublicConfig, validateTurnkeyConfig} 
 import * as kvsAccess from "../../utils/kvsAccess";
 import * as stripeAccess from "../stripe/stripeAccess";
 import {EmailGiftCardParams} from "./EmailGiftCardParams";
-import {createCharge, createRefund, updateCharge} from "./stripeRequests";
+import {createCharge, createRefund, setCardDetailsOnCharge} from "./stripeRequests";
 import * as metrics from "giftbit-lambda-metricslib";
 import {errorNotificationWrapper} from "giftbit-cassava-routes/dist/sentry";
 import {SendEmailResponse} from "aws-sdk/clients/ses";
@@ -31,7 +31,7 @@ const authConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("S
 const roleDefinitionsPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS");
 const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN");
 const assumeGiftcardPurchaseToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN");
-router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}/v1/storage/jwtSecret`, assumeGetSharedSecretToken));
+router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`, assumeGetSharedSecretToken));
 router.route("/v1/turnkey/purchaseGiftcard")
     .method("POST")
     .handler(async evt => {
@@ -51,32 +51,20 @@ router.route("/v1/turnkey/purchaseGiftcard")
             additionalHeaders: {AuthorizeAs: authorizeAs}
         });
 
-        const config: TurnkeyPublicConfig = await turnkeyConfigUtil.getConfig(assumeToken, authorizeAs);
-        console.log(`Fetched public turnkey config: ${JSON.stringify(config)}`);
-        validateTurnkeyConfig(config);
-
-        const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
-        const lightrailStripeConfig: StripeConfig = await stripeAccess.getStripeConfig();
-        validateStripeConfig(merchantStripeConfig, lightrailStripeConfig);
-
-        const params = giftcardPurchaseParams.setParamsFromRequest(evt);
-        giftcardPurchaseParams.validateParams(params);
+        const {config, merchantStripeConfig, lightrailStripeConfig, params} = await validateConfigAndParams(assumeToken, authorizeAs, evt);
 
         let charge: Charge = await createCharge({
             amount: params.initialValue,
             currency: config.currency,
             source: params.stripeCardToken
         }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
-        console.log(`Created charge ${JSON.stringify(charge)}`);
 
         let card: Card;
         try {
             card = await createCard(charge, params, config);
-            console.log(`Created card ${JSON.stringify(card)}.`);
         } catch (err) {
             console.log(`An error occurred during card creation. Error: ${JSON.stringify(err)}.`);
-            const refund = await createRefund(charge.id, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
-            console.log(`Refunded charge ${charge.id}. Refund: ${JSON.stringify(refund)}.`);
+            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card);
 
             if (err.status == 400) {
                 throw new RestError(httpStatusCode.clientError.BAD_REQUEST, err.body.message)
@@ -86,22 +74,17 @@ router.route("/v1/turnkey/purchaseGiftcard")
         }
 
         try {
-            const chargeUpdate = updateCharge(charge.id, {description: `${config.companyName} gift card. Purchase reference number: ${card.cardId}.`}, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
-            console.log(`Updated charge ${JSON.stringify(chargeUpdate)}.`);
-
-            const emailResult = await emailGiftToRecipient({
+            await setCardDetailsOnCharge(charge.id, {description: `${config.companyName} gift card. Purchase reference number: ${card.cardId}.`}, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
+            await emailGiftToRecipient({
                 cardId: card.cardId,
                 recipientEmail: params.recipientEmail,
                 message: params.message
             }, config);
-            console.log(`Email sent. MessageId: ${emailResult.MessageId}.`);
         } catch (err) {
             console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
-            const refund = await createRefund(charge.id, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
-            console.log(`Refunded charge ${charge.id}. Refund: ${JSON.stringify(refund)}.`);
-            const cancel = await lightrail.cards.cancelCard(card, card.cardId + "-cancel");
-            console.log(`Cancelled card ${card.cardId}. Cancel response: ${cancel}.`);
+            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card);
         }
+
         metrics.histogram("turnkey.giftcardpurchase", 1, ["type:succeeded"]);
         metrics.flush();
         return {
@@ -131,7 +114,9 @@ async function createCard(charge, params: GiftcardPurchaseParams, config: Turnke
         }
     };
     console.log(`Creating card with params ${JSON.stringify(cardParams)}.`);
-    return await lightrail.cards.createCard(cardParams);
+    const card: Card = await lightrail.cards.createCard(cardParams);
+    console.log(`Created card ${JSON.stringify(card)}.`);
+    return Promise.resolve(card)
 }
 
 function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeConfig) {
@@ -157,12 +142,14 @@ async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: 
     emailTemplate = emailTemplate.replace("{{claimLink}}", claimLink);
     emailTemplate = emailTemplate.replace("{{termsAndConditions}}", turnkeyConfig.termsAndConditions);
 
-    return sendEmail({
+    const sendEmailResponse = await sendEmail({
         toAddress: params.recipientEmail,
         subject: `You have received a gift card for ${turnkeyConfig.companyName}`,
         body: emailTemplate,
         replyToAddress: turnkeyConfig.giftEmailReplyToAddress,
     });
+    console.log(`Email sent. MessageId: ${sendEmailResponse.MessageId}.`);
+    return Promise.resolve(sendEmailResponse)
 }
 
 //noinspection JSUnusedGlobalSymbols
@@ -175,3 +162,26 @@ export const handler = errorNotificationWrapper(
         process.env["SECURE_CONFIG_KEY_DATADOG"],   // the S3 object key for the DataDog API key
         router.getLambdaHandler()                   // the cassava handler
     ));
+
+async function validateConfigAndParams(assumeToken: string, authorizeAs: string, request: RouterEvent): Promise<{ config: TurnkeyPublicConfig, merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeConfig, params: GiftcardPurchaseParams }> {
+    const config: TurnkeyPublicConfig = await turnkeyConfigUtil.getConfig(assumeToken, authorizeAs);
+    console.log(`Fetched public turnkey config: ${JSON.stringify(config)}`);
+    validateTurnkeyConfig(config);
+
+    const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
+    const lightrailStripeConfig: StripeConfig = await stripeAccess.getStripeConfig();
+    validateStripeConfig(merchantStripeConfig, lightrailStripeConfig);
+
+    const params = giftcardPurchaseParams.setParamsFromRequest(request);
+    giftcardPurchaseParams.validateParams(params);
+    return Promise.resolve({config, merchantStripeConfig, lightrailStripeConfig, params})
+}
+
+async function rollback(lightrailStripeConfig: StripeConfig, merchantStripeConfig: StripeAuth, charge: Charge, card?: Card): Promise<void> {
+    const refund = await createRefund(charge.id, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
+    console.log(`Refunded charge ${charge.id}. Refund: ${JSON.stringify(refund)}.`);
+    if (card) {
+        const cancel = await lightrail.cards.cancelCard(card, card.cardId + "-cancel");
+        console.log(`Cancelled card ${card.cardId}. Cancel response: ${cancel}.`);
+    }
+}

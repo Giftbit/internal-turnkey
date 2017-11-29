@@ -17,6 +17,9 @@ Parameters:
     Type: String
     Description: The domain of the Lightrail web app
     AllowedPattern: (\w+\.)+\w{3}
+  PathToMerchantSharedSecret:
+    Type: String
+    Description: Path to merchant shared jwt secret
   SecureConfigBucket:
     Type: String
     Description: Name of the S3 bucket holding the JWT secure config
@@ -79,6 +82,7 @@ Resources:
       Environment:
         Variables:
           LIGHTRAIL_DOMAIN: !Ref LightrailDomain
+          PATH_TO_MERCHANT_SHARED_SECRET: !Ref PathToMerchantSharedSecret
           SECURE_CONFIG_BUCKET: !Ref SecureConfigBucket
           SECURE_CONFIG_KEY_DATADOG: !Ref SecureConfigKeyDataDog
           SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
@@ -118,10 +122,6 @@ Resources:
                 - ses:SendEmail
                 - ses:SendRawEmail
               Resource: "*"
-#              Condition:
-#                StringEquals:
-#                 "ses:FromAddress":
-#                  !Sub "*@${EmailDomainName}"
       Tags:
         ShortName: GiftcardPurchaseFunction
         Service: Turnkey

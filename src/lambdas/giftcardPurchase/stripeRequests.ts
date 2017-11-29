@@ -11,9 +11,11 @@ export async function createCharge(params: StripeCreateChargeParams, lightrailSt
         params.description = "Gift Card";
         params.metadata = {info: "The gift card issued from this charge was issued with a userSuppliedId of the charge id."};
         console.log(`Creating charge ${JSON.stringify(params)}.`);
-        return lightrailStripe.charges.create(params, {
+        const charge = await lightrailStripe.charges.create(params, {
             stripe_account: merchantStripeAccountId,
         });
+        console.log(`Created charge ${JSON.stringify(charge)}`);
+        return Promise.resolve(charge);
     } catch (err) {
         switch (err.type) {
             case 'StripeCardError':
@@ -28,15 +30,18 @@ export async function createCharge(params: StripeCreateChargeParams, lightrailSt
     }
 }
 
-export async function updateCharge(chargeId: string, params: StripeUpdateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<any> {
+export async function setCardDetailsOnCharge(chargeId: string, params: StripeUpdateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<any> {
     const merchantStripe = require("stripe")(lightrailStripeSecretKey);
     console.log(`Updating charge ${JSON.stringify(params)}.`);
-    return merchantStripe.charges.update(
+    const chargeUpdate = await merchantStripe.charges.update(
         chargeId,
         params, {
             stripe_account: merchantStripeAccountId,
         }
     );
+    // todo make this a DTO.
+    console.log(`Updated charge ${JSON.stringify(chargeUpdate)}.`);
+    return Promise.resolve(chargeUpdate)
 }
 
 export async function createRefund(chargeId: string, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Refund> {
