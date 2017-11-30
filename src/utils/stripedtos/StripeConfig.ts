@@ -1,3 +1,6 @@
+/**
+ * Stripe configuration values stored in secure config.
+ */
 export interface StripeConfig {
     email: string;
     clientId: string;
