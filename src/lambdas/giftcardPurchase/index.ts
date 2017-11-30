@@ -22,6 +22,7 @@ import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 import {Charge} from "../../utils/stripedtos/Charge";
 import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
 import {StripeConfig} from "../../utils/stripedtos/StripeConfig";
+import {formatCurrency} from "../../utils/currencyUtils";
 
 export const router = new cassava.Router();
 
@@ -78,7 +79,8 @@ router.route("/v1/turnkey/purchaseGiftcard")
             await emailGiftToRecipient({
                 cardId: card.cardId,
                 recipientEmail: params.recipientEmail,
-                message: params.message
+                message: params.message,
+                initialValue: params.initialValue
             }, config);
         } catch (err) {
             console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
@@ -132,19 +134,39 @@ function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeC
 async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: TurnkeyPublicConfig): Promise<SendEmailResponse> {
     const fullcode: string = (await lightrail.cards.getFullcode(params.cardId)).code;
     console.log(`retrieved fullcode lastFour ${fullcode.substring(fullcode.length - 4)}`);
-    let claimLink = turnkeyConfig.claimLink.replace(FULLCODE_REPLACMENT_STRING, fullcode);
+    const claimLink = turnkeyConfig.claimLink.replace(FULLCODE_REPLACMENT_STRING, fullcode);
+    const from = params.senderName ? `From ${params.senderName}` : "";
+    const emailSubject = turnkeyConfig.emailSubject ? turnkeyConfig.emailSubject : `You have received a gift card for ${turnkeyConfig.companyName}`;
+    params.message = params.message ? params.message : "Hi there, please enjoy this gift.";
 
     let emailTemplate = RECIPIENT_EMAIL;
-    emailTemplate = emailTemplate.replace("{{message}}", params.message);
-    emailTemplate = emailTemplate.replace("{{fullcode}}", fullcode);
-    emailTemplate = emailTemplate.replace("{{companyName}}", turnkeyConfig.companyName);
-    emailTemplate = emailTemplate.replace("{{logo}}", turnkeyConfig.logo);
-    emailTemplate = emailTemplate.replace("{{claimLink}}", claimLink);
-    emailTemplate = emailTemplate.replace("{{termsAndConditions}}", turnkeyConfig.termsAndConditions);
+    const templateReplacements = [
+        {key: "fullcode", value: fullcode},
+        {key: "claimLink", value: claimLink},
+        {key: "senderFrom", value: from},
+        {key: "emailSubject", value: emailSubject},
+        {key: "message", value: params.message},
+        {key: "initialValue", value: formatCurrency(params.initialValue, turnkeyConfig.currency)},
+        {key: "additionalInfo", value: turnkeyConfig.additionalInfo},
+        {key: "claimLink", value: turnkeyConfig.claimLink},
+        {key: "companyName", value: turnkeyConfig.companyName},
+        {key: "companyWebsiteUrl", value: turnkeyConfig.companyWebsiteUrl},
+        {key: "copyright", value: turnkeyConfig.copyright},
+        {key: "customerSupportEmail", value: turnkeyConfig.customerSupportEmail},
+        {key: "linkToPrivacy", value: turnkeyConfig.linkToPrivacy},
+        {key: "linkToTerms", value: turnkeyConfig.linkToTerms},
+        {key: "logo", value: turnkeyConfig.logo},
+        {key: "termsAndConditions", value: turnkeyConfig.termsAndConditions},
+    ];
+
+    for (const replacement of templateReplacements) {
+        const regexp = new RegExp(`__${replacement.key}__`, "g");
+        emailTemplate = emailTemplate.replace(regexp, replacement.value);
+    }
 
     const sendEmailResponse = await sendEmail({
         toAddress: params.recipientEmail,
-        subject: `You have received a gift card for ${turnkeyConfig.companyName}`,
+        subject: emailSubject,
         body: emailTemplate,
         replyToAddress: turnkeyConfig.giftEmailReplyToAddress,
     });

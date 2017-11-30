@@ -2,16 +2,20 @@ import {isValidEmailAddress} from "./emailUtils";
 import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 
 export interface TurnkeyPublicConfig {
+    additionalInfo: string;
     claimLink: string;
     companyName: string;
+    companyWebsiteUrl: string;
     copyright: string;
     currency: string;
+    customerSupportEmail: string;
+    emailSubject?: string;
     giftEmailReplyToAddress: string;
     linkToPrivacy: string;
     linkToTerms: string;
     logo: string;
     programId: string;
-    stripePublicKey?: string;
+    stripePublicKey: string;
     termsAndConditions: string;
 }
 
@@ -28,6 +32,10 @@ export function validateTurnkeyConfig(config: TurnkeyPublicConfig): void {
         console.log("turnkey config cannot be null");
         throw new GiftbitRestError(424, "Config was not set.", "MissingConfig");
     }
+    if (!config.additionalInfo) {
+        console.log("turnkey config additionalInfo cannot be null");
+        throw new GiftbitRestError(424, "Config additionalInfo was not set.", "MissingAdditionalInfo");
+    }
     if (!config.claimLink || !config.claimLink.includes(FULLCODE_REPLACMENT_STRING)) {
         console.log(`turnkey config claimLink must contain {{fullcode}} for replacement.`);
         throw new GiftbitRestError(424, "Config claimLink must be set and contain {{fullcode}} for replacement.", "InvalidClaimLink");
@@ -36,6 +44,10 @@ export function validateTurnkeyConfig(config: TurnkeyPublicConfig): void {
         console.log("turnkey config companyName cannot be null");
         throw new GiftbitRestError(424, "Config companyName was not set.", "MissingCompanyName");
     }
+    if (!config.companyWebsiteUrl) {
+        console.log("turnkey config companyWebsiteUrl cannot be null");
+        throw new GiftbitRestError(424, "Config companyWebsiteUrl was not set.", "MissingCompanyWebsiteUrl");
+    }
     if (!config.copyright) {
         console.log("turnkey config copyright cannot be null");
         throw new GiftbitRestError(424, "Config copyright was not set.", "MissingCopyright");
@@ -43,6 +55,10 @@ export function validateTurnkeyConfig(config: TurnkeyPublicConfig): void {
     if (!config.currency) {
         console.log("turnkey config currency cannot be null");
         throw new GiftbitRestError(424, "Config currency was not set.", "MissingCurrency");
+    }
+    if (!config.customerSupportEmail) {
+        console.log("turnkey config customerSupportEmail cannot be null");
+        throw new GiftbitRestError(424, "Config customerSupportEmail was not set.", "MissingCustomerSupportEmail");
     }
     if (!config.giftEmailReplyToAddress || !isValidEmailAddress(config.giftEmailReplyToAddress)) {
         console.log("turnkey config giftEmailReplyToAddress cannot be null");
