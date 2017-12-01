@@ -64,7 +64,7 @@ export async function fetchStripeAccount(stripeAuth: StripeAuth): Promise<Stripe
     const stripeConfig = await stripeConfigPromise;
     const resp = await superagent.get(`https://${stripeConfig.secretKey}:@api.stripe.com/v1/accounts/${stripeAuth.stripe_user_id}`)
         .set("Stripe-Account", stripeAuth.stripe_user_id)
-        .ok(resp => resp.status === 200 || resp.status === 401);
+        .ok(resp => resp.status === 200 || resp.status === 401 || resp.status === 403);
 
     if (resp.ok) {
         return resp.body;
