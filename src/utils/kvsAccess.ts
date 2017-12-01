@@ -12,7 +12,7 @@ export async function kvsGet(token: string, key: string, authorizeAs?: string): 
         .set("Authorization", `Bearer ${token}`)
         .ok(r => r.ok || r.status === 404);
     if (authorizeAs) {
-        request.set("AuthorizeAs", authorizeAs)
+        request.set("AuthorizeAs", authorizeAs);
     }
     const resp = await request.query({});
     if (resp.ok) {

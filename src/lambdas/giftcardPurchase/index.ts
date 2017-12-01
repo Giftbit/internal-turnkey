@@ -42,7 +42,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
         auth.requireIds("giftbitUserId");
         auth.requireScopes("lightrailV1:purchaseGiftcard");
-        const authorizeAs: string = evt.meta["auth-token"].split(".",)[1];
+        const authorizeAs: string = evt.meta["auth-token"].split(".")[1];
         const assumeToken = (await assumeGiftcardPurchaseToken).assumeToken;
 
         lightrail.configure({
@@ -67,10 +67,10 @@ router.route("/v1/turnkey/purchaseGiftcard")
             console.log(`An error occurred during card creation. Error: ${JSON.stringify(err)}.`);
             await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card);
 
-            if (err.status == 400) {
-                throw new RestError(httpStatusCode.clientError.BAD_REQUEST, err.body.message)
+            if (err.status === 400) {
+                throw new RestError(httpStatusCode.clientError.BAD_REQUEST, err.body.message);
             } else {
-                throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR)
+                throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR);
             }
         }
 
@@ -118,7 +118,7 @@ async function createCard(charge, params: GiftcardPurchaseParams, config: Turnke
     console.log(`Creating card with params ${JSON.stringify(cardParams)}.`);
     const card: Card = await lightrail.cards.createCard(cardParams);
     console.log(`Created card ${JSON.stringify(card)}.`);
-    return Promise.resolve(card)
+    return Promise.resolve(card);
 }
 
 function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeConfig) {
@@ -171,7 +171,7 @@ async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: 
         replyToAddress: turnkeyConfig.giftEmailReplyToAddress,
     });
     console.log(`Email sent. MessageId: ${sendEmailResponse.MessageId}.`);
-    return Promise.resolve(sendEmailResponse)
+    return Promise.resolve(sendEmailResponse);
 }
 
 //noinspection JSUnusedGlobalSymbols
@@ -196,7 +196,7 @@ async function validateConfigAndParams(assumeToken: string, authorizeAs: string,
 
     const params = giftcardPurchaseParams.setParamsFromRequest(request);
     giftcardPurchaseParams.validateParams(params);
-    return Promise.resolve({config, merchantStripeConfig, lightrailStripeConfig, params})
+    return Promise.resolve({config, merchantStripeConfig, lightrailStripeConfig, params});
 }
 
 async function rollback(lightrailStripeConfig: StripeConfig, merchantStripeConfig: StripeAuth, charge: Charge, card?: Card): Promise<void> {
