@@ -4,10 +4,10 @@ import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 
 export interface GiftcardPurchaseParams {
     initialValue: number;
-    message: string;
+    message?: string;
     recipientEmail: string;
     senderEmail: string;
-    senderName: string;
+    senderName?: string;
     stripeCardToken: string;
 }
 
@@ -18,7 +18,7 @@ export function setParamsFromRequest(request: RouterEvent): GiftcardPurchasePara
         recipientEmail: request.body.recipientEmail,
         senderEmail: request.body.senderEmail,
         senderName: request.body.senderName,
-        stripeCardToken: request.body.stripeCardToken
+        stripeCardToken: request.body.stripeCardToken 
     };
 }
 
@@ -26,11 +26,6 @@ export function validateParams(params: GiftcardPurchaseParams): void {
     if (!params.initialValue || params.initialValue <= 0) {
         console.log(`parameter initialValue failed validation. received ${params.initialValue}`);
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter initialValue must be a positive integer", "InvalidParamInitialValue")
-    }
-
-    if (!params.message) {
-        console.log(`parameter message failed validation. received ${params.message}`);
-        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter message must be set", "InvalidParamMessage")
     }
 
     if (!params.recipientEmail || !isValidEmailAddress(params.recipientEmail)) {
@@ -41,11 +36,6 @@ export function validateParams(params: GiftcardPurchaseParams): void {
     if (!params.senderEmail || !isValidEmailAddress(params.senderEmail)) {
         console.log(`parameter senderEmail failed validation. received ${params.senderEmail}`);
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter senderEmail must be a valid email", "InvalidParamSenderEmail")
-    }
-
-    if (!params.senderName) {
-        console.log(`parameter senderName failed validation. received ${params.senderName}`);
-        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter senderName must be set", "InvalidParamSenderName")
     }
 
     if (!params.stripeCardToken) {
