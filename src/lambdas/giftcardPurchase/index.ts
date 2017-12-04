@@ -80,6 +80,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
                 cardId: card.cardId,
                 recipientEmail: params.recipientEmail,
                 message: params.message,
+                senderName: params.senderName,
                 initialValue: params.initialValue
             }, config);
         } catch (err) {
