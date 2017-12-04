@@ -1,7 +1,7 @@
 import * as superagent from "superagent";
 
 function storageUrl(): string {
-    return "https://" + process.env["LIGHTRAIL_DOMAIN"] + "/v1/storage/"
+    return `https://${process.env["LIGHTRAIL_DOMAIN"]}/v1/storage/`;
 }
 
 export async function getKey(key: string, apiKey: string): Promise<any> {

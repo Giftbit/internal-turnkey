@@ -18,11 +18,11 @@ export async function createCharge(params: StripeCreateChargeParams, lightrailSt
         return Promise.resolve(charge);
     } catch (err) {
         switch (err.type) {
-            case 'StripeCardError':
+            case "StripeCardError":
                 throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge card in Stripe.", "ChargeFailed");
-            case 'StripeInvalidRequestError':
+            case "StripeInvalidRequestError":
                 throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "The stripeCardToken was invalid.", "StripeInvalidRequestError");
-            case 'RateLimitError':
+            case "RateLimitError":
                 throw new GiftbitRestError(httpStatusCode.clientError.TOO_MANY_REQUESTS, `Service was rate limited by dependent service.`, "DependentServiceRateLimited");
             default:
                 throw new Error(`An unexpected error occurred while attempting to charge card. error ${err}`);
@@ -41,7 +41,7 @@ export async function setCardDetailsOnCharge(chargeId: string, params: StripeUpd
     );
     // todo make this a DTO.
     console.log(`Updated charge ${JSON.stringify(chargeUpdate)}.`);
-    return Promise.resolve(chargeUpdate)
+    return Promise.resolve(chargeUpdate);
 }
 
 export async function createRefund(chargeId: string, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Refund> {

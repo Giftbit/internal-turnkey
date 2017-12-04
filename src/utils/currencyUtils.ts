@@ -15,6 +15,6 @@ export const formatCurrency = (value: number, isoCurrencyCode: string = "USD"): 
             minimumFractionDigits: 2
         };
 
-        return `$${(value * 0.01).toLocaleString(undefined, options)}`
+        return `$${(value * 0.01).toLocaleString(undefined, options)}`;
     }
 };

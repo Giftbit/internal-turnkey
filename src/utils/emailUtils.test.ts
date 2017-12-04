@@ -41,7 +41,7 @@ describe("test email validator", () => {
     for (const testCase of testCases) {
         it(`test ${testCase.isValid ? "is" : "not"} valid. Case: ${testCase.message}`, () => {
             const isValid: boolean = isValidEmailAddress(testCase.email);
-            chai.assert.equal(isValid, testCase.isValid)
+            chai.assert.equal(isValid, testCase.isValid);
         });
     }
 });
