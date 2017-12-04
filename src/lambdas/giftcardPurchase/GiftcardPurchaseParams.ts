@@ -1,23 +1,23 @@
-import {httpStatusCode, RestError} from "cassava";
-
-const EMAIL_REGEX = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
+import {httpStatusCode, RouterEvent} from "cassava";
+import {isValidEmailAddress} from "../../utils/emailUtils";
+import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 
 export interface GiftcardPurchaseParams {
     initialValue: number;
-    message: string;
+    message?: string;
     recipientEmail: string;
     senderEmail: string;
-    senderName: string;
+    senderName?: string;
     stripeCardToken: string;
 }
 
-export function setParamsFromRequest(request: any): GiftcardPurchaseParams {
+export function setParamsFromRequest(request: RouterEvent): GiftcardPurchaseParams {
     return {
         initialValue: request.body.initialValue,
-        senderName: request.body.senderName,
-        senderEmail: request.body.senderEmail,
-        recipientEmail: request.body.recipientEmail,
         message: request.body.message,
+        recipientEmail: request.body.recipientEmail,
+        senderEmail: request.body.senderEmail,
+        senderName: request.body.senderName,
         stripeCardToken: request.body.stripeCardToken
     };
 }
@@ -25,29 +25,21 @@ export function setParamsFromRequest(request: any): GiftcardPurchaseParams {
 export function validateParams(params: GiftcardPurchaseParams): void {
     if (!params.initialValue || params.initialValue <= 0) {
         console.log(`parameter initialValue failed validation. received ${params.initialValue}`);
-        throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "parameter initialValue must be a positive integer")
+        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter initialValue must be a positive integer", "InvalidParamInitialValue");
     }
-    if (!params.message) {
-        console.log(`parameter message failed validation. received ${params.message}`);
-        throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "parameter message must be set")
-    }
-    let emailMatch = params.recipientEmail.match(EMAIL_REGEX);
-    console.log(`emailMatch: ${emailMatch}`);
-    console.log(`!emailMatch = ${!emailMatch}`);
-    if (!params.recipientEmail || !emailMatch) {
+
+    if (!params.recipientEmail || !isValidEmailAddress(params.recipientEmail)) {
         console.log(`parameter recipientEmail failed validation. received ${params.recipientEmail}`);
-        throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "parameter recipientEmail must be a valid email")
+        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter recipientEmail must be a valid email", "InvalidParamRecipientEmail");
     }
-    if (!params.senderName) {
-        console.log(`parameter senderName failed validation. received ${params.senderName}`);
-        throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "parameter senderName must be set")
-    }
-    if (!params.senderEmail) {
+
+    if (!params.senderEmail || !isValidEmailAddress(params.senderEmail)) {
         console.log(`parameter senderEmail failed validation. received ${params.senderEmail}`);
-        throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "parameter senderEmail must be set")
+        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter senderEmail must be a valid email", "InvalidParamSenderEmail");
     }
+
     if (!params.stripeCardToken) {
         console.log(`parameter stripeCardToken failed validation. received ${params.stripeCardToken}`);
-        throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "parameter stripeCardToken must be set")
+        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter stripeCardToken must be set", "InvalidParamStripeCardToken");
     }
 }

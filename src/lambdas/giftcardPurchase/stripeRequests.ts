@@ -1,50 +1,56 @@
-import {GiftcardPurchaseParams} from "./GiftcardPurchaseParams";
-import {Card} from "lightrail-client/dist/model";
+import {Charge} from "../../utils/stripedtos/Charge";
+import {Refund} from "../../utils/stripedtos/Refund";
+import {StripeCreateChargeParams} from "../../utils/stripedtos/StripeCreateChargeParams";
+import {StripeUpdateChargeParams} from "../../utils/stripedtos/StripeUpdateChargeParams";
+import {httpStatusCode} from "cassava";
+import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 
-export async function createChargeOnBehalfOfMerchant(requestParams: GiftcardPurchaseParams, currency: string, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<any> {
-    const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
-
-    console.log(`Attempting to charge card on behalf of merchant.`);
-    // Charge the user's card:
-    return lightrailStripe.charges.create({
-        amount: requestParams.initialValue,
-        currency: currency,
-        description: "Charge for gift card.",
-        source: requestParams.stripeCardToken,
-        destination: {
-            account: merchantStripeAccountId
-        }
-    });
-}
-
-export async function retrieveTransfer(charge: any, lightrailStripeSecretKey: string) {
-    const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
-    return lightrailStripe.transfers.retrieve(
-        charge.transfer
-    );
-}
-
-export async function updateCharge(paymentId: string, card: Card, merchantStripeSecretKet: string): Promise<any> {
-    const merchantStripe = require("stripe")(merchantStripeSecretKet);
-    console.log(`Attempting to update metadata.`);
-    // Charge the user's card:
-    return merchantStripe.charges.update(
-        paymentId,
-        {
-            description: "Lightrail Gift Card",
-            metadata: {
-                cardId: card.cardId,
-            }
+export async function createCharge(params: StripeCreateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Charge> {
+    try {
+        const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
+        params.description = "Gift Card";
+        params.metadata = {info: "The gift card issued from this charge was issued with a userSuppliedId of the charge id."};
+        console.log(`Creating charge ${JSON.stringify(params)}.`);
+        const charge = await lightrailStripe.charges.create(params, {
+            stripe_account: merchantStripeAccountId,
         });
+        console.log(`Created charge ${JSON.stringify(charge)}`);
+        return Promise.resolve(charge);
+    } catch (err) {
+        switch (err.type) {
+            case "StripeCardError":
+                throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge card in Stripe.", "ChargeFailed");
+            case "StripeInvalidRequestError":
+                throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "The stripeCardToken was invalid.", "StripeInvalidRequestError");
+            case "RateLimitError":
+                throw new GiftbitRestError(httpStatusCode.clientError.TOO_MANY_REQUESTS, `Service was rate limited by dependent service.`, "DependentServiceRateLimited");
+            default:
+                throw new Error(`An unexpected error occurred while attempting to charge card. error ${err}`);
+        }
+    }
 }
 
-export async function createRefund(charge: any, lightrailStripeSecret: string): Promise<any> {
-    const lightrailStripe = require("stripe")(lightrailStripeSecret);
-    console.log(`Attempting to create refund.`);
-    // Charge the user's card:
+export async function setCardDetailsOnCharge(chargeId: string, params: StripeUpdateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<any> {
+    const merchantStripe = require("stripe")(lightrailStripeSecretKey);
+    console.log(`Updating charge ${JSON.stringify(params)}.`);
+    const chargeUpdate = await merchantStripe.charges.update(
+        chargeId,
+        params, {
+            stripe_account: merchantStripeAccountId,
+        }
+    );
+    // todo make this a DTO.
+    console.log(`Updated charge ${JSON.stringify(chargeUpdate)}.`);
+    return Promise.resolve(chargeUpdate);
+}
+
+export async function createRefund(chargeId: string, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Refund> {
+    const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
+    console.log(`Creating refund for charge ${chargeId}.`);
     return lightrailStripe.refunds.create({
-        charge: charge.id,
-        reverse_transfer: true,
-        metadata: {"explanation": "The Lightrail Gift Card could not be issued due to technical reasons."}
+        charge: chargeId,
+        metadata: {"explanation": "The Lightrail Gift Card could not be issued due to an unexpected error."}
+    }, {
+        stripe_account: merchantStripeAccountId
     });
 }

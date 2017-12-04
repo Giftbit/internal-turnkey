@@ -4,6 +4,8 @@ import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as stripeAccess from "./stripeAccess";
 import * as kvsAccess from "../../utils/kvsAccess";
 import {StripeConnectState} from "./StripeConnectState";
+import {getConfig, TURNKEY_PUBLIC_CONFIG_KEY} from "../../utils/turnkeyConfigStore";
+import {TurnkeyPublicConfig} from "../../utils/TurnkeyConfig";
 
 export const router = new cassava.Router();
 
@@ -26,6 +28,11 @@ router.route("/v1/turnkey/stripe/callback")
         const auth = new giftbitRoutes.jwtauth.AuthorizationBadge(state.jwtPayload);
         const authToken = auth.sign((await authConfigPromise).secretkey);
         await kvsAccess.kvsPut(authToken, "stripeAuth", stripeAuth);
+
+        // Store public config.
+        const turnkeyPublicConfig: any = await getConfig(authToken) || {} as Partial<TurnkeyPublicConfig>;
+        turnkeyPublicConfig.stripePublicKey = stripeAuth.stripe_publishable_key;
+        await kvsAccess.kvsPut(authToken, TURNKEY_PUBLIC_CONFIG_KEY, turnkeyPublicConfig);
 
         return {
             statusCode: 302,
@@ -52,10 +59,9 @@ router.route("/v1/turnkey/stripe")
             const account = await stripeAccess.fetchStripeAccount(stripeAuth);
             if (account) {
                 return {
-                    statusCode: 302,
-                    body: null,
-                    headers: {
-                        Location: `https://${process.env["LIGHTRAIL_WEBAPP_DOMAIN"]}/app/`
+                    body: {
+                        connected: true,
+                        location: `https://${process.env["LIGHTRAIL_WEBAPP_DOMAIN"]}/app/`
                     }
                 };
             }
@@ -64,15 +70,11 @@ router.route("/v1/turnkey/stripe")
         const stripeConnectState = await StripeConnectState.create(auth);
         const stripeCallbackLocation = `https://${process.env["LIGHTRAIL_WEBAPP_DOMAIN"]}/v1/turnkey/stripe/callback`;
         const stripeConfig = await stripeAccess.getStripeConfig();
-        const location = `https://connect.stripe.com/oauth/authorize?response_type=code&scope=read_write&client_id=${encodeURIComponent(stripeConfig.clientId)}&redirect_uri=${encodeURIComponent(stripeCallbackLocation)}&state=${encodeURIComponent(stripeConnectState.uuid)}`;
 
         return {
-            statusCode: 302,
             body: {
-                location
-            },
-            headers: {
-                Location: location
+                connected: false,
+                location: `https://connect.stripe.com/oauth/authorize?response_type=code&scope=read_write&client_id=${encodeURIComponent(stripeConfig.clientId)}&redirect_uri=${encodeURIComponent(stripeCallbackLocation)}&state=${encodeURIComponent(stripeConnectState.uuid)}`
             }
         };
     });
@@ -92,7 +94,7 @@ router.route("/v1/turnkey/stripe")
 
         return {
             body: {
-                success: true
+                connected: false
             }
         };
     });

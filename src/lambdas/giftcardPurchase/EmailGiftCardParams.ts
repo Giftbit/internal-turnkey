@@ -1,5 +1,7 @@
 export interface EmailGiftCardParams {
-    fullcode: string;
+    cardId: string;
     message: string;
     recipientEmail: string;
+    senderName: string;
+    initialValue: number;
 }

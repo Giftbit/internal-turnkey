@@ -9,13 +9,32 @@ Parameters:
     Type: String
     Description: The domain of the Lightrail REST API
     AllowedPattern: (\w+\.)+\w{3}
+  EmailDomainName:
+    Type: String
+    Description: The lightrail email domain.
+    Default: ""
   LightrailWebappDomain:
     Type: String
     Description: The domain of the Lightrail web app
     AllowedPattern: (\w+\.)+\w{3}
+  PathToMerchantSharedSecret:
+    Type: String
+    Description: Path to merchant shared jwt secret
   SecureConfigBucket:
     Type: String
     Description: Name of the S3 bucket holding the JWT secure config
+  SecureConfigKeyAssumeGiftcardPurchaseToken:
+    Type: String
+    Description: Name of the Assume Auth token in S3 that can has the scopes required for the giftcard purchase lambda
+  SecureConfigKeyAssumeStorageScopeToken:
+    Type: String
+    Description: Name of the Assume Auth token in S3 that can be used to access merchant secret key in KVS
+  SecureConfigKeyDataDog:
+    Type: String
+    Description: Key of the DataDog API key secure config object in S3
+  SecureConfigKeySentry:
+    Type: String
+    Description: Key of the Sentry API key secure config object in S3
   SecureConfigKeyJwt:
     Type: String
     Description: Key of the JWT secure config object in S3
@@ -63,10 +82,16 @@ Resources:
       Environment:
         Variables:
           LIGHTRAIL_DOMAIN: !Ref LightrailDomain
+          PATH_TO_MERCHANT_SHARED_SECRET: !Ref PathToMerchantSharedSecret
           SECURE_CONFIG_BUCKET: !Ref SecureConfigBucket
+          SECURE_CONFIG_KEY_DATADOG: !Ref SecureConfigKeyDataDog
           SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
           SECURE_CONFIG_KEY_ROLE_DEFINITIONS: !Ref SecureConfigKeyRoleDefinitions
+          SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN: !Ref SecureConfigKeyAssumeGiftcardPurchaseToken
+          SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN: !Ref SecureConfigKeyAssumeStorageScopeToken
+          SECURE_CONFIG_KEY_SENTRY: !Ref SecureConfigKeySentry
           SECURE_CONFIG_KEY_STRIPE: !Ref SecureConfigKeyStripe
+          LIGHTRAIL_EMAIL_DOMAIN_NAME: !Ref EmailDomainName
       Policies:
         - Version: 2012-10-17
           Statement:
@@ -74,6 +99,10 @@ Resources:
               Action:
                 - s3:GetObject
               Resource:
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeGiftcardPurchaseToken}"
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeStorageScopeToken}"
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyDataDog}"
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeySentry}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyJwt}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyRoleDefinitions}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyStripe}"
@@ -93,10 +122,6 @@ Resources:
                 - ses:SendEmail
                 - ses:SendRawEmail
               Resource: "*"
-              #Condition:
-              #  StringEquals:
-              #   "ses:FromAddress":
-              #      "email@example.com"
       Tags:
         ShortName: GiftcardPurchaseFunction
         Service: Turnkey

@@ -35,6 +35,10 @@ Parameters:
     Type: String
     Description: Name of the docker image to build from.
     Default: ""
+  EmailDomainName:
+    Type: String
+    Description: The lightrail email domain.
+    Default: ""
   CiKeysAccessRoleArn:
     Type: String
     Description: ARN for the role that can access our CI SSH keys bucket.

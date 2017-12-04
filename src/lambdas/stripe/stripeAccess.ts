@@ -1,10 +1,10 @@
 import * as superagent from "superagent";
 import * as giftbitRoutes from "giftbit-cassava-routes";
-import {StripeAccount} from "./StripeAccount";
-import {StripeAuth} from "./StripeAuth";
-import {StripeAuthErrorResponse} from "./StripeAuthErrorResponse";
 import {httpStatusCode, RestError} from "cassava";
-import {StripeConfig} from "./StripeConfig";
+import {StripeAccount} from "../../utils/stripedtos/StripeAccount";
+import {StripeConfig} from "../../utils/stripedtos/StripeConfig";
+import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
+import {StripeAuthErrorResponse} from "../../utils/stripedtos/StripeAuthErrorResponse";
 
 const stripeConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<StripeConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_STRIPE");
 
@@ -64,7 +64,7 @@ export async function fetchStripeAccount(stripeAuth: StripeAuth): Promise<Stripe
     const stripeConfig = await stripeConfigPromise;
     const resp = await superagent.get(`https://${stripeConfig.secretKey}:@api.stripe.com/v1/accounts/${stripeAuth.stripe_user_id}`)
         .set("Stripe-Account", stripeAuth.stripe_user_id)
-        .ok(resp => resp.status === 200 || resp.status === 401);
+        .ok(resp => resp.status === 200 || resp.status === 401 || resp.status === 403);
 
     if (resp.ok) {
         return resp.body;
