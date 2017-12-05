@@ -1,7 +1,7 @@
 import "babel-polyfill";
 import * as cassava from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
-import * as stripeAccess from "./stripeAccess";
+import * as stripeAccess from "../../utils/stripeAccess";
 import * as kvsAccess from "../../utils/kvsAccess";
 import {StripeConnectState} from "./StripeConnectState";
 import {getConfig, TURNKEY_PUBLIC_CONFIG_KEY} from "../../utils/turnkeyConfigStore";

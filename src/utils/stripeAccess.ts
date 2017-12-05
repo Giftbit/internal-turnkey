@@ -1,13 +1,18 @@
 import * as superagent from "superagent";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import {httpStatusCode, RestError} from "cassava";
-import {StripeAccount} from "../../utils/stripedtos/StripeAccount";
-import {StripeConfig, StripeEnvConfig} from "../../utils/stripedtos/StripeConfig";
-import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
-import {StripeAuthErrorResponse} from "../../utils/stripedtos/StripeAuthErrorResponse";
+import {StripeAccount} from "./stripedtos/StripeAccount";
+import {StripeConfig, StripeEnvConfig} from "./stripedtos/StripeConfig";
+import {StripeAuth} from "./stripedtos/StripeAuth";
+import {StripeAuthErrorResponse} from "./stripedtos/StripeAuthErrorResponse";
 
 const stripeConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<StripeConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_STRIPE");
 
+/**
+ * Get Stripe credentials for test or live mode.  Test mode credentials allow
+ * dummy credit cards and skip through stripe connect.
+ * @param test whether to use test account credentials or live credentials
+ */
 export async function getStripeConfig(test: boolean): Promise<StripeEnvConfig> {
     const stripeConfig = await stripeConfigPromise;
     if (!stripeConfig.live && !stripeConfig.test) {

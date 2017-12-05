@@ -10,7 +10,7 @@ import {GiftcardPurchaseParams} from "./GiftcardPurchaseParams";
 import {RECIPIENT_EMAIL} from "./RecipientEmail";
 import {FULLCODE_REPLACMENT_STRING, TurnkeyPublicConfig, validateTurnkeyConfig} from "../../utils/TurnkeyConfig";
 import * as kvsAccess from "../../utils/kvsAccess";
-import * as stripeAccess from "../stripe/stripeAccess";
+import * as stripeAccess from "../../utils/stripeAccess";
 import {EmailGiftCardParams} from "./EmailGiftCardParams";
 import {createCharge, createRefund, setCardDetailsOnCharge} from "./stripeRequests";
 import * as metrics from "giftbit-lambda-metricslib";
