@@ -29,8 +29,8 @@ router.route("/v1/turnkey/stripe/callback")
             evt.requireQueryStringParameter("code");
             evt.requireQueryStringParameter("scope", ["read_write"]);
 
-            const stripeAuth = await stripeAccess.fetchStripeAuth(evt.queryStringParameters["code"]);
             const auth = new giftbitRoutes.jwtauth.AuthorizationBadge(state.jwtPayload);
+            const stripeAuth = await stripeAccess.fetchStripeAuth(evt.queryStringParameters["code"], auth.isTestUser());
             const authToken = auth.sign((await authConfigPromise).secretkey);
             await kvsAccess.kvsPut(authToken, "stripeAuth", stripeAuth);
 
@@ -62,7 +62,7 @@ router.route("/v1/turnkey/stripe")
 
         const stripeAuth = await kvsAccess.kvsGet(evt.meta["auth-token"], "stripeAuth");
         if (stripeAuth) {
-            const account = await stripeAccess.fetchStripeAccount(stripeAuth);
+            const account = await stripeAccess.fetchStripeAccount(stripeAuth, auth.isTestUser());
             if (account) {
                 return {
                     body: {
@@ -75,7 +75,7 @@ router.route("/v1/turnkey/stripe")
 
         const stripeConnectState = await StripeConnectState.create(auth);
         const stripeCallbackLocation = `https://${process.env["LIGHTRAIL_WEBAPP_DOMAIN"]}/v1/turnkey/stripe/callback`;
-        const stripeConfig = await stripeAccess.getStripeConfig();
+        const stripeConfig = await stripeAccess.getStripeConfig(auth.isTestUser());
 
         return {
             body: {
@@ -94,7 +94,7 @@ router.route("/v1/turnkey/stripe")
 
         const stripeAuth = await kvsAccess.kvsGet(evt.meta["auth-token"], "stripeAuth");
         if (stripeAuth) {
-            await stripeAccess.revokeStripeAuth(stripeAuth);
+            await stripeAccess.revokeStripeAuth(stripeAuth, auth.isTestUser());
             await kvsAccess.kvsDelete(evt.meta["auth-token"], "stripeAuth");
         }
 
@@ -121,7 +121,7 @@ router.route("/v1/turnkey/stripe")
             };
         }
 
-        const account = await stripeAccess.fetchStripeAccount(stripeAuth);
+        const account = await stripeAccess.fetchStripeAccount(stripeAuth, auth.isTestUser());
         if (!account) {
             return {
                 body: {
