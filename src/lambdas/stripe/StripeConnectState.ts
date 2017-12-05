@@ -3,6 +3,10 @@ import * as dynameh from "dynameh";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as uuid from "uuid";
 
+/**
+ * State stored after initiating Stripe Connect, and retrieved after the callback
+ * to complete it.
+ */
 export interface StripeConnectState {
     uuid: string;
     ttl: string | Date;

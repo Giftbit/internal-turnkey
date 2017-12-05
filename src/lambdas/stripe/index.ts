@@ -1,7 +1,7 @@
 import "babel-polyfill";
 import * as cassava from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
-import * as stripeAccess from "./stripeAccess";
+import * as stripeAccess from "../../utils/stripeAccess";
 import * as kvsAccess from "../../utils/kvsAccess";
 import {StripeConnectState} from "./StripeConnectState";
 import {getConfig, TURNKEY_PUBLIC_CONFIG_KEY} from "../../utils/turnkeyConfigStore";
@@ -15,24 +15,30 @@ router.route(new giftbitRoutes.HealthCheckRoute("/v1/turnkey/healthCheck"));
 router.route("/v1/turnkey/stripe/callback")
     .method("GET")
     .handler(async evt => {
-        evt.requireQueryStringParameter("scope", ["read_write"]);
         evt.requireQueryStringParameter("state");
-        evt.requireQueryStringParameter("code");
 
         const state = await StripeConnectState.get(evt.queryStringParameters["state"]);
         if (!state) {
+            console.log(`Stripe connect error: Stripe Connect link has expired state='${evt.queryStringParameters["state"]}'`);
             throw new cassava.RestError(cassava.httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "Stripe Connect link has expired.  Please start again.");
         }
 
-        const stripeAuth = await stripeAccess.fetchStripeAuth(evt.queryStringParameters["code"]);
-        const auth = new giftbitRoutes.jwtauth.AuthorizationBadge(state.jwtPayload);
-        const authToken = auth.sign((await authConfigPromise).secretkey);
-        await kvsAccess.kvsPut(authToken, "stripeAuth", stripeAuth);
+        if (evt.queryStringParameters["error"]) {
+            console.log(`Stripe Connect error error='${evt.queryStringParameters["error"]}' error_description='${evt.queryStringParameters["error_description"]}' state='${evt.queryStringParameters["state"]}' gui='${state && state.jwtPayload && state.jwtPayload.g && state.jwtPayload.g.gui}'`);
+        } else {
+            evt.requireQueryStringParameter("code");
+            evt.requireQueryStringParameter("scope", ["read_write"]);
 
-        // Store public config.
-        const turnkeyPublicConfig: any = await getConfig(authToken) || {} as Partial<TurnkeyPublicConfig>;
-        turnkeyPublicConfig.stripePublicKey = stripeAuth.stripe_publishable_key;
-        await kvsAccess.kvsPut(authToken, TURNKEY_PUBLIC_CONFIG_KEY, turnkeyPublicConfig);
+            const auth = new giftbitRoutes.jwtauth.AuthorizationBadge(state.jwtPayload);
+            const stripeAuth = await stripeAccess.fetchStripeAuth(evt.queryStringParameters["code"], auth.isTestUser());
+            const authToken = auth.sign((await authConfigPromise).secretkey);
+            await kvsAccess.kvsPut(authToken, "stripeAuth", stripeAuth);
+
+            // Store public config.
+            const turnkeyPublicConfig: any = await getConfig(authToken) || {} as Partial<TurnkeyPublicConfig>;
+            turnkeyPublicConfig.stripePublicKey = stripeAuth.stripe_publishable_key;
+            await kvsAccess.kvsPut(authToken, TURNKEY_PUBLIC_CONFIG_KEY, turnkeyPublicConfig);
+        }
 
         return {
             statusCode: 302,
@@ -56,7 +62,7 @@ router.route("/v1/turnkey/stripe")
 
         const stripeAuth = await kvsAccess.kvsGet(evt.meta["auth-token"], "stripeAuth");
         if (stripeAuth) {
-            const account = await stripeAccess.fetchStripeAccount(stripeAuth);
+            const account = await stripeAccess.fetchStripeAccount(stripeAuth, auth.isTestUser());
             if (account) {
                 return {
                     body: {
@@ -69,7 +75,7 @@ router.route("/v1/turnkey/stripe")
 
         const stripeConnectState = await StripeConnectState.create(auth);
         const stripeCallbackLocation = `https://${process.env["LIGHTRAIL_WEBAPP_DOMAIN"]}/v1/turnkey/stripe/callback`;
-        const stripeConfig = await stripeAccess.getStripeConfig();
+        const stripeConfig = await stripeAccess.getStripeConfig(auth.isTestUser());
 
         return {
             body: {
@@ -88,7 +94,7 @@ router.route("/v1/turnkey/stripe")
 
         const stripeAuth = await kvsAccess.kvsGet(evt.meta["auth-token"], "stripeAuth");
         if (stripeAuth) {
-            await stripeAccess.revokeStripeAuth(stripeAuth);
+            await stripeAccess.revokeStripeAuth(stripeAuth, auth.isTestUser());
             await kvsAccess.kvsDelete(evt.meta["auth-token"], "stripeAuth");
         }
 
@@ -115,7 +121,7 @@ router.route("/v1/turnkey/stripe")
             };
         }
 
-        const account = await stripeAccess.fetchStripeAccount(stripeAuth);
+        const account = await stripeAccess.fetchStripeAccount(stripeAuth, auth.isTestUser());
         if (!account) {
             return {
                 body: {
