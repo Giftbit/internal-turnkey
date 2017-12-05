@@ -21,7 +21,7 @@ import {CreateCardParams} from "lightrail-client/dist/params";
 import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 import {Charge} from "../../utils/stripedtos/Charge";
 import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
-import {StripeEnvConfig} from "../../utils/stripedtos/StripeConfig";
+import {StripeModeConfig} from "../../utils/stripedtos/StripeConfig";
 import {formatCurrency} from "../../utils/currencyUtils";
 
 export const router = new cassava.Router();
@@ -122,7 +122,7 @@ async function createCard(charge, params: GiftcardPurchaseParams, config: Turnke
     return Promise.resolve(card);
 }
 
-function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeEnvConfig) {
+function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeModeConfig) {
     if (!merchantStripeConfig || !merchantStripeConfig.stripe_user_id) {
         throw new GiftbitRestError(424, "Merchant stripe config stripe_user_id must be set.", "MissingStripeUserId");
     }
@@ -186,7 +186,7 @@ export const handler = errorNotificationWrapper(
         router.getLambdaHandler()                   // the cassava handler
     ));
 
-async function validateConfigAndParams(auth: giftbitRoutes.jwtauth.AuthorizationBadge, assumeToken: string, authorizeAs: string, request: RouterEvent): Promise<{ config: TurnkeyPublicConfig, merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeEnvConfig, params: GiftcardPurchaseParams }> {
+async function validateConfigAndParams(auth: giftbitRoutes.jwtauth.AuthorizationBadge, assumeToken: string, authorizeAs: string, request: RouterEvent): Promise<{ config: TurnkeyPublicConfig, merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeModeConfig, params: GiftcardPurchaseParams }> {
     const config: TurnkeyPublicConfig = await turnkeyConfigUtil.getConfig(assumeToken, authorizeAs);
     console.log(`Fetched public turnkey config: ${JSON.stringify(config)}`);
     validateTurnkeyConfig(config);
@@ -200,7 +200,7 @@ async function validateConfigAndParams(auth: giftbitRoutes.jwtauth.Authorization
     return Promise.resolve({config, merchantStripeConfig, lightrailStripeConfig, params});
 }
 
-async function rollback(lightrailStripeConfig: StripeEnvConfig, merchantStripeConfig: StripeAuth, charge: Charge, card?: Card): Promise<void> {
+async function rollback(lightrailStripeConfig: StripeModeConfig, merchantStripeConfig: StripeAuth, charge: Charge, card?: Card): Promise<void> {
     const refund = await createRefund(charge.id, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
     console.log(`Refunded charge ${charge.id}. Refund: ${JSON.stringify(refund)}.`);
     if (card) {

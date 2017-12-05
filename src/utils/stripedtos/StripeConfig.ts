@@ -3,11 +3,14 @@
  */
 export interface StripeConfig {
     email: string;
-    test: StripeEnvConfig;
-    live: StripeEnvConfig;
+    test: StripeModeConfig;
+    live: StripeModeConfig;
 }
 
-export interface StripeEnvConfig {
+/**
+ * Configuration particular to a mode in Stripe (live or test).
+ */
+export interface StripeModeConfig {
     clientId: string;
     secretKey: string;
     publishableKey: string;
