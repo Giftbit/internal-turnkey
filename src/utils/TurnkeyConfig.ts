@@ -32,10 +32,6 @@ export function validateTurnkeyConfig(config: TurnkeyPublicConfig): void {
         console.log("turnkey config cannot be null");
         throw new GiftbitRestError(424, "Config was not set.", "MissingConfig");
     }
-    if (!config.additionalInfo) {
-        console.log("turnkey config additionalInfo cannot be null");
-        throw new GiftbitRestError(424, "Config additionalInfo was not set.", "MissingAdditionalInfo");
-    }
     if (!config.claimLink || !config.claimLink.includes(FULLCODE_REPLACMENT_STRING)) {
         console.log(`turnkey config claimLink must contain {{fullcode}} for replacement.`);
         throw new GiftbitRestError(424, "Config claimLink must be set and contain {{fullcode}} for replacement.", "InvalidClaimLink");
