@@ -52,7 +52,8 @@ router.route("/v1/turnkey/purchaseGiftcard")
             additionalHeaders: {AuthorizeAs: authorizeAs}
         });
 
-        const {config, merchantStripeConfig, lightrailStripeConfig, params} = await validateConfigAndParams(auth, assumeToken, authorizeAs, evt);
+        const {config, merchantStripeConfig, lightrailStripeConfig} = await validateConfig(auth, assumeToken, authorizeAs);
+        const params = validateParams(evt);
 
         let charge: Charge = await createCharge({
             amount: params.initialValue,
@@ -86,6 +87,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
         } catch (err) {
             console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
             await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card);
+            throw new GiftbitRestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR)
         }
 
         metrics.histogram("turnkey.giftcardpurchase", 1, ["type:succeeded"]);
@@ -148,11 +150,12 @@ async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: 
         {key: "emailSubject", value: emailSubject},
         {key: "message", value: params.message},
         {key: "initialValue", value: formatCurrency(params.initialValue, turnkeyConfig.currency)},
-        {key: "additionalInfo", value: turnkeyConfig.additionalInfo},
+        {key: "additionalInfo", value: turnkeyConfig.additionalInfo ? turnkeyConfig.additionalInfo : ""},
         {key: "claimLink", value: turnkeyConfig.claimLink},
         {key: "companyName", value: turnkeyConfig.companyName},
         {key: "companyWebsiteUrl", value: turnkeyConfig.companyWebsiteUrl},
         {key: "copyright", value: turnkeyConfig.copyright},
+        {key: "copyrightYear", value: new Date().getUTCFullYear().toString()},
         {key: "customerSupportEmail", value: turnkeyConfig.customerSupportEmail},
         {key: "linkToPrivacy", value: turnkeyConfig.linkToPrivacy},
         {key: "linkToTerms", value: turnkeyConfig.linkToTerms},
@@ -186,7 +189,7 @@ export const handler = errorNotificationWrapper(
         router.getLambdaHandler()                   // the cassava handler
     ));
 
-async function validateConfigAndParams(auth: giftbitRoutes.jwtauth.AuthorizationBadge, assumeToken: string, authorizeAs: string, request: RouterEvent): Promise<{ config: TurnkeyPublicConfig, merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeModeConfig, params: GiftcardPurchaseParams }> {
+async function validateConfig(auth: giftbitRoutes.jwtauth.AuthorizationBadge, assumeToken: string, authorizeAs: string): Promise<{ config: TurnkeyPublicConfig, merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeModeConfig }> {
     const config: TurnkeyPublicConfig = await turnkeyConfigUtil.getConfig(assumeToken, authorizeAs);
     console.log(`Fetched public turnkey config: ${JSON.stringify(config)}`);
     validateTurnkeyConfig(config);
@@ -194,10 +197,13 @@ async function validateConfigAndParams(auth: giftbitRoutes.jwtauth.Authorization
     const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
     const lightrailStripeConfig = await stripeAccess.getStripeConfig(auth.isTestUser());
     validateStripeConfig(merchantStripeConfig, lightrailStripeConfig);
+    return Promise.resolve({config, merchantStripeConfig, lightrailStripeConfig});
+}
 
+function validateParams(request: RouterEvent): GiftcardPurchaseParams {
     const params = giftcardPurchaseParams.setParamsFromRequest(request);
     giftcardPurchaseParams.validateParams(params);
-    return Promise.resolve({config, merchantStripeConfig, lightrailStripeConfig, params});
+    return params
 }
 
 async function rollback(lightrailStripeConfig: StripeModeConfig, merchantStripeConfig: StripeAuth, charge: Charge, card?: Card): Promise<void> {
