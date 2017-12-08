@@ -150,7 +150,7 @@ async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: 
         {key: "emailSubject", value: emailSubject},
         {key: "message", value: params.message},
         {key: "initialValue", value: formatCurrency(params.initialValue, turnkeyConfig.currency)},
-        {key: "additionalInfo", value: turnkeyConfig.additionalInfo ? turnkeyConfig.additionalInfo : ""},
+        {key: "additionalInfo", value: turnkeyConfig.additionalInfo || " "},
         {key: "claimLink", value: turnkeyConfig.claimLink},
         {key: "companyName", value: turnkeyConfig.companyName},
         {key: "companyWebsiteUrl", value: turnkeyConfig.companyWebsiteUrl},
@@ -197,7 +197,7 @@ async function validateConfig(auth: giftbitRoutes.jwtauth.AuthorizationBadge, as
     const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
     const lightrailStripeConfig = await stripeAccess.getStripeConfig(auth.isTestUser());
     validateStripeConfig(merchantStripeConfig, lightrailStripeConfig);
-    return Promise.resolve({config, merchantStripeConfig, lightrailStripeConfig});
+    return {config, merchantStripeConfig, lightrailStripeConfig};
 }
 
 function validateParams(request: RouterEvent): GiftcardPurchaseParams {
