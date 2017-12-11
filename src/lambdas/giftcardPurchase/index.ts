@@ -14,7 +14,7 @@ import * as stripeAccess from "../../utils/stripeAccess";
 import {EmailGiftCardParams} from "./EmailGiftCardParams";
 import {createCharge, createRefund, setCardDetailsOnCharge} from "./stripeRequests";
 import * as metrics from "giftbit-lambda-metricslib";
-import {errorNotificationWrapper} from "giftbit-cassava-routes/dist/sentry";
+import {errorNotificationWrapper, sendErrorNotificaiton} from "giftbit-cassava-routes/dist/sentry";
 import {SendEmailResponse} from "aws-sdk/clients/ses";
 import {sendEmail} from "../../utils/emailUtils";
 import {CreateCardParams} from "lightrail-client/dist/params";
@@ -37,9 +37,9 @@ router.route("/v1/turnkey/purchaseGiftcard")
     .method("POST")
     .handler(async evt => {
         console.log("Received request:" + JSON.stringify(evt));
-        metrics.histogram("turnkey.giftcardpurchase", 1, ["type:requested"]);
-        metrics.flush();
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
+        metrics.histogram("turnkey.giftcardpurchase", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
+        metrics.flush();
         auth.requireIds("giftbitUserId");
         auth.requireScopes("lightrailV1:purchaseGiftcard");
         const authorizeAs: string = evt.meta["auth-token"].split(".")[1];
@@ -58,7 +58,8 @@ router.route("/v1/turnkey/purchaseGiftcard")
         let charge: Charge = await createCharge({
             amount: params.initialValue,
             currency: config.currency,
-            source: params.stripeCardToken
+            source: params.stripeCardToken,
+            receipt_email: params.senderEmail
         }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
 
         let card: Card;
@@ -90,8 +91,6 @@ router.route("/v1/turnkey/purchaseGiftcard")
             throw new GiftbitRestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR)
         }
 
-        metrics.histogram("turnkey.giftcardpurchase", 1, ["type:succeeded"]);
-        metrics.flush();
         return {
             body: {
                 cardId: card.cardId
@@ -190,14 +189,19 @@ export const handler = errorNotificationWrapper(
     ));
 
 async function validateConfig(auth: giftbitRoutes.jwtauth.AuthorizationBadge, assumeToken: string, authorizeAs: string): Promise<{ config: TurnkeyPublicConfig, merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeModeConfig }> {
-    const config: TurnkeyPublicConfig = await turnkeyConfigUtil.getConfig(assumeToken, authorizeAs);
-    console.log(`Fetched public turnkey config: ${JSON.stringify(config)}`);
-    validateTurnkeyConfig(config);
+    try {
+        const config: TurnkeyPublicConfig = await turnkeyConfigUtil.getConfig(assumeToken, authorizeAs);
+        console.log(`Fetched public turnkey config: ${JSON.stringify(config)}`);
+        validateTurnkeyConfig(config);
 
-    const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
-    const lightrailStripeConfig = await stripeAccess.getStripeConfig(auth.isTestUser());
-    validateStripeConfig(merchantStripeConfig, lightrailStripeConfig);
-    return {config, merchantStripeConfig, lightrailStripeConfig};
+        const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
+        const lightrailStripeConfig = await stripeAccess.getStripeConfig(auth.isTestUser());
+        validateStripeConfig(merchantStripeConfig, lightrailStripeConfig);
+        return {config, merchantStripeConfig, lightrailStripeConfig};
+    } catch (err) {
+        sendErrorNotificaiton(err);
+        throw err
+    }
 }
 
 function validateParams(request: RouterEvent): GiftcardPurchaseParams {

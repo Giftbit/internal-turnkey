@@ -3,6 +3,6 @@ export interface StripeCreateChargeParams {
     currency: string;
     description?: string;
     metadata?: any;
-    receipt_email?: string;
+    receipt_email: string;
     source: string;
 }
