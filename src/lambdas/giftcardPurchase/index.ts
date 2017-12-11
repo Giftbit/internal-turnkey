@@ -37,9 +37,9 @@ router.route("/v1/turnkey/purchaseGiftcard")
     .method("POST")
     .handler(async evt => {
         console.log("Received request:" + JSON.stringify(evt));
-        metrics.histogram("turnkey.giftcardpurchase", 1, ["type:requested"]);
-        metrics.flush();
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
+        metrics.histogram("turnkey.giftcardpurchase", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
+        metrics.flush();
         auth.requireIds("giftbitUserId");
         auth.requireScopes("lightrailV1:purchaseGiftcard");
         const authorizeAs: string = evt.meta["auth-token"].split(".")[1];
@@ -58,7 +58,8 @@ router.route("/v1/turnkey/purchaseGiftcard")
         let charge: Charge = await createCharge({
             amount: params.initialValue,
             currency: config.currency,
-            source: params.stripeCardToken
+            source: params.stripeCardToken,
+            receipt_email: params.senderEmail
         }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
 
         let card: Card;
@@ -90,8 +91,6 @@ router.route("/v1/turnkey/purchaseGiftcard")
             throw new GiftbitRestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR)
         }
 
-        metrics.histogram("turnkey.giftcardpurchase", 1, ["type:succeeded"]);
-        metrics.flush();
         return {
             body: {
                 cardId: card.cardId
