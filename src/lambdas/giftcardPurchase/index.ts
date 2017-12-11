@@ -14,7 +14,7 @@ import * as stripeAccess from "../../utils/stripeAccess";
 import {EmailGiftCardParams} from "./EmailGiftCardParams";
 import {createCharge, createRefund, setCardDetailsOnCharge} from "./stripeRequests";
 import * as metrics from "giftbit-lambda-metricslib";
-import {errorNotificationWrapper} from "giftbit-cassava-routes/dist/sentry";
+import {errorNotificationWrapper, sendErrorNotificaiton} from "giftbit-cassava-routes/dist/sentry";
 import {SendEmailResponse} from "aws-sdk/clients/ses";
 import {sendEmail} from "../../utils/emailUtils";
 import {CreateCardParams} from "lightrail-client/dist/params";
@@ -189,14 +189,19 @@ export const handler = errorNotificationWrapper(
     ));
 
 async function validateConfig(auth: giftbitRoutes.jwtauth.AuthorizationBadge, assumeToken: string, authorizeAs: string): Promise<{ config: TurnkeyPublicConfig, merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeModeConfig }> {
-    const config: TurnkeyPublicConfig = await turnkeyConfigUtil.getConfig(assumeToken, authorizeAs);
-    console.log(`Fetched public turnkey config: ${JSON.stringify(config)}`);
-    validateTurnkeyConfig(config);
+    try {
+        const config: TurnkeyPublicConfig = await turnkeyConfigUtil.getConfig(assumeToken, authorizeAs);
+        console.log(`Fetched public turnkey config: ${JSON.stringify(config)}`);
+        validateTurnkeyConfig(config);
 
-    const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
-    const lightrailStripeConfig = await stripeAccess.getStripeConfig(auth.isTestUser());
-    validateStripeConfig(merchantStripeConfig, lightrailStripeConfig);
-    return {config, merchantStripeConfig, lightrailStripeConfig};
+        const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
+        const lightrailStripeConfig = await stripeAccess.getStripeConfig(auth.isTestUser());
+        validateStripeConfig(merchantStripeConfig, lightrailStripeConfig);
+        return {config, merchantStripeConfig, lightrailStripeConfig};
+    } catch (err) {
+        sendErrorNotificaiton(err);
+        throw err
+    }
 }
 
 function validateParams(request: RouterEvent): GiftcardPurchaseParams {
