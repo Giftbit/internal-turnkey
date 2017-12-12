@@ -12,7 +12,7 @@ import {FULLCODE_REPLACMENT_STRING, TurnkeyPublicConfig, validateTurnkeyConfig} 
 import * as kvsAccess from "../../utils/kvsAccess";
 import * as stripeAccess from "../../utils/stripeAccess";
 import {EmailGiftCardParams} from "./EmailGiftCardParams";
-import {createCharge, createRefund, setCardDetailsOnCharge} from "./stripeRequests";
+import {createCharge, createRefund, updateCharge} from "./stripeRequests";
 import * as metrics from "giftbit-lambda-metricslib";
 import {errorNotificationWrapper, sendErrorNotificaiton} from "giftbit-cassava-routes/dist/sentry";
 import {SendEmailResponse} from "aws-sdk/clients/ses";
@@ -54,20 +54,31 @@ router.route("/v1/turnkey/purchaseGiftcard")
 
         const {config, merchantStripeConfig, lightrailStripeConfig} = await validateConfig(auth, assumeToken, authorizeAs);
         const params = validateParams(evt);
+        const chargeAndCardCoreMetadata = {
+            sender_name: params.senderName,
+            sender_email: params.senderEmail,
+            recipient_email: params.recipientEmail
+        };
 
         let charge: Charge = await createCharge({
             amount: params.initialValue,
             currency: config.currency,
             source: params.stripeCardToken,
-            receipt_email: params.senderEmail
+            receipt_email: params.senderEmail,
+            metadata: chargeAndCardCoreMetadata
         }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
 
         let card: Card;
         try {
-            card = await createCard(charge, params, config);
+            const cardMetadata = {
+                ...chargeAndCardCoreMetadata,
+                charge_id: charge.id,
+                "giftbit-note": {note: `charge_id: ${charge.id}, sender: ${params.senderEmail}, recipient: ${params.recipientEmail}`}
+            };
+            card = await createCard(charge.id, params, config, cardMetadata);
         } catch (err) {
             console.log(`An error occurred during card creation. Error: ${JSON.stringify(err)}.`);
-            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card);
+            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, 'Refunded due to an unexpected error during gift card creation in Lightrail.');
 
             if (err.status === 400) {
                 throw new RestError(httpStatusCode.clientError.BAD_REQUEST, err.body.message);
@@ -77,7 +88,10 @@ router.route("/v1/turnkey/purchaseGiftcard")
         }
 
         try {
-            await setCardDetailsOnCharge(charge.id, {description: `${config.companyName} gift card. Purchase reference number: ${card.cardId}.`}, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
+            await updateCharge(charge.id, {
+                description: `${config.companyName} gift card. Purchase reference number: ${card.cardId}.`,
+                metadata: {...chargeAndCardCoreMetadata, lightrail_gift_card_id: card.cardId}
+            }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
             await emailGiftToRecipient({
                 cardId: card.cardId,
                 recipientEmail: params.recipientEmail,
@@ -87,7 +101,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
             }, config);
         } catch (err) {
             console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
-            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card);
+            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, `Refunded due to an unexpected error during the gift card delivery step. The gift card ${card.cardId} will be cancelled in Lightrail.`);
             throw new GiftbitRestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR)
         }
 
@@ -98,24 +112,13 @@ router.route("/v1/turnkey/purchaseGiftcard")
         };
     });
 
-async function createCard(charge, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig): Promise<Card> {
+async function createCard(userSuppliedId: string, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig, metadata?: any): Promise<Card> {
     const cardParams: CreateCardParams = {
-        userSuppliedId: charge.id,
+        userSuppliedId: userSuppliedId,
         cardType: Card.CardType.GIFT_CARD,
         initialValue: params.initialValue,
         programId: config.programId,
-        metadata: {
-            sender: {
-                name: params.senderName,
-                email: params.senderEmail,
-            },
-            recipient: {
-                email: params.recipientEmail
-            },
-            charge: {
-                chargeId: charge.id,
-            }
-        }
+        metadata: metadata
     };
     console.log(`Creating card with params ${JSON.stringify(cardParams)}.`);
     const card: Card = await lightrail.cards.createCard(cardParams);
@@ -210,8 +213,8 @@ function validateParams(request: RouterEvent): GiftcardPurchaseParams {
     return params
 }
 
-async function rollback(lightrailStripeConfig: StripeModeConfig, merchantStripeConfig: StripeAuth, charge: Charge, card?: Card): Promise<void> {
-    const refund = await createRefund(charge.id, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
+async function rollback(lightrailStripeConfig: StripeModeConfig, merchantStripeConfig: StripeAuth, charge: Charge, card: Card, reason: string): Promise<void> {
+    const refund = await createRefund(charge.id, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id, reason);
     console.log(`Refunded charge ${charge.id}. Refund: ${JSON.stringify(refund)}.`);
     if (card) {
         const cancel = await lightrail.cards.cancelCard(card, card.cardId + "-cancel");
