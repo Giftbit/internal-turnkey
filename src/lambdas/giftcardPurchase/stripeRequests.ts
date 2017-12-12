@@ -6,16 +6,15 @@ import {httpStatusCode} from "cassava";
 import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 
 export async function createCharge(params: StripeCreateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Charge> {
+    const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
+    params.description = "Gift Card";
+    params.metadata = {info: "The gift card issued from this charge was issued with a userSuppliedId of the charge id."};
+    console.log(`Creating charge ${JSON.stringify(params)}.`);
+    let charge: Charge;
     try {
-        const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
-        params.description = "Gift Card";
-        params.metadata = {info: "The gift card issued from this charge was issued with a userSuppliedId of the charge id."};
-        console.log(`Creating charge ${JSON.stringify(params)}.`);
-        const charge = await lightrailStripe.charges.create(params, {
+        charge = await lightrailStripe.charges.create(params, {
             stripe_account: merchantStripeAccountId,
         });
-        console.log(`Created charge ${JSON.stringify(charge)}`);
-        return Promise.resolve(charge);
     } catch (err) {
         switch (err.type) {
             case "StripeCardError":
@@ -28,6 +27,13 @@ export async function createCharge(params: StripeCreateChargeParams, lightrailSt
                 throw new Error(`An unexpected error occurred while attempting to charge card. error ${err}`);
         }
     }
+    console.log(`Created charge ${JSON.stringify(charge)}`);
+    if (charge.review) {
+        console.log(`Charge was placed into review, likely due to elevated risk level. Will now refund.`);
+        await createRefund(charge.id, lightrailStripeSecretKey, merchantStripeAccountId);
+        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge card in Stripe.", "ChargeFailed");
+    }
+    return charge;
 }
 
 export async function setCardDetailsOnCharge(chargeId: string, params: StripeUpdateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<any> {
