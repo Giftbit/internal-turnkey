@@ -70,8 +70,11 @@ router.route("/v1/turnkey/purchaseGiftcard")
 
         let card: Card;
         try {
-            let cardMetadata = {...chargeMetadata};
-            cardMetadata.stripeChargeId = charge.id;
+            const cardMetadata = {
+                ...chargeMetadata,
+                stripeChargeId: charge.id,
+                "giftbit-note": {note: `chargeId: ${charge.id}, sender: ${params.senderEmail}, recipient: ${params.recipientEmail}`}
+            };
             card = await createCard(charge.id, params, config, cardMetadata);
         } catch (err) {
             console.log(`An error occurred during card creation. Error: ${JSON.stringify(err)}.`);
@@ -85,10 +88,9 @@ router.route("/v1/turnkey/purchaseGiftcard")
         }
 
         try {
-            chargeMetadata.lightrail_gift_card_id = card.cardId;
             await setCardDetailsOnCharge(charge.id, {
                 description: `${config.companyName} gift card. Purchase reference number: ${card.cardId}.`,
-                metadata: chargeMetadata
+                metadata: {...chargeMetadata, lightrail_gift_card_id: card.cardId}
             }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
             await emailGiftToRecipient({
                 cardId: card.cardId,
