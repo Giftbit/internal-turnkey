@@ -72,8 +72,8 @@ router.route("/v1/turnkey/purchaseGiftcard")
         try {
             const cardMetadata = {
                 ...chargeMetadata,
-                stripeChargeId: charge.id,
-                "giftbit-note": {note: `chargeId: ${charge.id}, sender: ${params.senderEmail}, recipient: ${params.recipientEmail}`}
+                charge_id: charge.id,
+                "giftbit-note": {note: `charge_id: ${charge.id}, sender: ${params.senderEmail}, recipient: ${params.recipientEmail}`}
             };
             card = await createCard(charge.id, params, config, cardMetadata);
         } catch (err) {
