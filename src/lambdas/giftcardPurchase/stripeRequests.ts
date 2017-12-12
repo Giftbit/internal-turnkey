@@ -28,7 +28,7 @@ export async function createCharge(params: StripeCreateChargeParams, lightrailSt
     }
     console.log(`Created charge ${JSON.stringify(charge)}`);
     if (charge.review) {
-        console.log(`Charge was placed into review, likely due to elevated risk level. Will now refund.`);
+        console.log(`Charge was flagged for a review in stripe. Will now refund.`);
         await createRefund(charge.id, lightrailStripeSecretKey, merchantStripeAccountId);
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge card in Stripe.", "ChargeFailed");
     }
