@@ -29,13 +29,13 @@ export async function createCharge(params: StripeCreateChargeParams, lightrailSt
     console.log(`Created charge ${JSON.stringify(charge)}`);
     if (charge.review) {
         console.log(`Charge was flagged for a review in stripe. Will now refund.`);
-        await createRefund(charge.id, lightrailStripeSecretKey, merchantStripeAccountId);
+        await createRefund(charge.id, lightrailStripeSecretKey, merchantStripeAccountId, 'Refunded since the charge was flagged for a manual review in Stripe. The gift card has not been issued.');
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge card in Stripe.", "ChargeFailed");
     }
     return charge;
 }
 
-export async function setCardDetailsOnCharge(chargeId: string, params: StripeUpdateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<any> {
+export async function updateCharge(chargeId: string, params: StripeUpdateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<any> {
     const merchantStripe = require("stripe")(lightrailStripeSecretKey);
     console.log(`Updating charge ${JSON.stringify(params)}.`);
     const chargeUpdate = await merchantStripe.charges.update(
@@ -49,13 +49,18 @@ export async function setCardDetailsOnCharge(chargeId: string, params: StripeUpd
     return Promise.resolve(chargeUpdate);
 }
 
-export async function createRefund(chargeId: string, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Refund> {
+export async function createRefund(chargeId: string, lightrailStripeSecretKey: string, merchantStripeAccountId: string, reason?: string): Promise<Refund> {
     const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
     console.log(`Creating refund for charge ${chargeId}.`);
-    return lightrailStripe.refunds.create({
+    const refund = await lightrailStripe.refunds.create({
         charge: chargeId,
-        metadata: {"explanation": "The Lightrail Gift Card could not be issued due to an unexpected error."}
+        metadata: {reason: reason || "not specified"} /* Doesn't show up in charge in stripe. Need to update charge so that it's obvious as to why it was refunded. */
     }, {
         stripe_account: merchantStripeAccountId
     });
+    await updateCharge(chargeId, {
+        description: reason
+    });
+    console.log(JSON.stringify(refund));
+    return refund
 }

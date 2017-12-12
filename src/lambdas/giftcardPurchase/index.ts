@@ -12,7 +12,7 @@ import {FULLCODE_REPLACMENT_STRING, TurnkeyPublicConfig, validateTurnkeyConfig} 
 import * as kvsAccess from "../../utils/kvsAccess";
 import * as stripeAccess from "../../utils/stripeAccess";
 import {EmailGiftCardParams} from "./EmailGiftCardParams";
-import {createCharge, createRefund, setCardDetailsOnCharge} from "./stripeRequests";
+import {createCharge, createRefund, updateCharge} from "./stripeRequests";
 import * as metrics from "giftbit-lambda-metricslib";
 import {errorNotificationWrapper, sendErrorNotificaiton} from "giftbit-cassava-routes/dist/sentry";
 import {SendEmailResponse} from "aws-sdk/clients/ses";
@@ -78,7 +78,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
             card = await createCard(charge.id, params, config, cardMetadata);
         } catch (err) {
             console.log(`An error occurred during card creation. Error: ${JSON.stringify(err)}.`);
-            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card);
+            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, 'Refunded due to an unexpected error during gift card creation in Lightrail.');
 
             if (err.status === 400) {
                 throw new RestError(httpStatusCode.clientError.BAD_REQUEST, err.body.message);
@@ -88,7 +88,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
         }
 
         try {
-            await setCardDetailsOnCharge(charge.id, {
+            await updateCharge(charge.id, {
                 description: `${config.companyName} gift card. Purchase reference number: ${card.cardId}.`,
                 metadata: {...chargeAndCardCoreMetadata, lightrail_gift_card_id: card.cardId}
             }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
@@ -101,7 +101,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
             }, config);
         } catch (err) {
             console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
-            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card);
+            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, `Refunded due to an unexpected error during the gift card delivery step. The gift card ${card.cardId} will be cancelled in Lightrail.`);
             throw new GiftbitRestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR)
         }
 
@@ -213,8 +213,8 @@ function validateParams(request: RouterEvent): GiftcardPurchaseParams {
     return params
 }
 
-async function rollback(lightrailStripeConfig: StripeModeConfig, merchantStripeConfig: StripeAuth, charge: Charge, card?: Card): Promise<void> {
-    const refund = await createRefund(charge.id, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
+async function rollback(lightrailStripeConfig: StripeModeConfig, merchantStripeConfig: StripeAuth, charge: Charge, card: Card, reason: string): Promise<void> {
+    const refund = await createRefund(charge.id, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id, reason);
     console.log(`Refunded charge ${charge.id}. Refund: ${JSON.stringify(refund)}.`);
     if (card) {
         const cancel = await lightrail.cards.cancelCard(card, card.cardId + "-cancel");
