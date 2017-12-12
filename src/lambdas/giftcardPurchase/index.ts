@@ -54,7 +54,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
 
         const {config, merchantStripeConfig, lightrailStripeConfig} = await validateConfig(auth, assumeToken, authorizeAs);
         const params = validateParams(evt);
-        let chargeMetadata = {
+        const chargeAndCardCoreMetadata = {
             sender_name: params.senderName,
             sender_email: params.senderEmail,
             recipient_email: params.recipientEmail
@@ -65,13 +65,13 @@ router.route("/v1/turnkey/purchaseGiftcard")
             currency: config.currency,
             source: params.stripeCardToken,
             receipt_email: params.senderEmail,
-            metadata: chargeMetadata
+            metadata: chargeAndCardCoreMetadata
         }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
 
         let card: Card;
         try {
             const cardMetadata = {
-                ...chargeMetadata,
+                ...chargeAndCardCoreMetadata,
                 charge_id: charge.id,
                 "giftbit-note": {note: `charge_id: ${charge.id}, sender: ${params.senderEmail}, recipient: ${params.recipientEmail}`}
             };
@@ -90,7 +90,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
         try {
             await setCardDetailsOnCharge(charge.id, {
                 description: `${config.companyName} gift card. Purchase reference number: ${card.cardId}.`,
-                metadata: {...chargeMetadata, lightrail_gift_card_id: card.cardId}
+                metadata: {...chargeAndCardCoreMetadata, lightrail_gift_card_id: card.cardId}
             }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
             await emailGiftToRecipient({
                 cardId: card.cardId,
