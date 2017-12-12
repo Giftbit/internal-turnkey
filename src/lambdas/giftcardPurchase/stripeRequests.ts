@@ -7,8 +7,7 @@ import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 
 export async function createCharge(params: StripeCreateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Charge> {
     const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
-    params.description = "Gift Card";
-    params.metadata = {info: "The gift card issued from this charge was issued with a userSuppliedId of the charge id."};
+    params.description = "Lightrail Gift Card charge.";
     console.log(`Creating charge ${JSON.stringify(params)}.`);
     let charge: Charge;
     try {

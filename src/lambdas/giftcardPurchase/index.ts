@@ -54,17 +54,25 @@ router.route("/v1/turnkey/purchaseGiftcard")
 
         const {config, merchantStripeConfig, lightrailStripeConfig} = await validateConfig(auth, assumeToken, authorizeAs);
         const params = validateParams(evt);
+        let chargeMetadata = {
+            sender_name: params.senderName,
+            sender_email: params.senderEmail,
+            recipient_email: params.recipientEmail
+        };
 
         let charge: Charge = await createCharge({
             amount: params.initialValue,
             currency: config.currency,
             source: params.stripeCardToken,
-            receipt_email: params.senderEmail
+            receipt_email: params.senderEmail,
+            metadata: chargeMetadata
         }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
 
         let card: Card;
         try {
-            card = await createCard(charge, params, config);
+            let cardMetadata = {...chargeMetadata};
+            cardMetadata.stripeChargeId = charge.id;
+            card = await createCard(charge.id, params, config, cardMetadata);
         } catch (err) {
             console.log(`An error occurred during card creation. Error: ${JSON.stringify(err)}.`);
             await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card);
@@ -77,7 +85,11 @@ router.route("/v1/turnkey/purchaseGiftcard")
         }
 
         try {
-            await setCardDetailsOnCharge(charge.id, {description: `${config.companyName} gift card. Purchase reference number: ${card.cardId}.`}, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
+            chargeMetadata.lightrail_gift_card_id = card.cardId;
+            await setCardDetailsOnCharge(charge.id, {
+                description: `${config.companyName} gift card. Purchase reference number: ${card.cardId}.`,
+                metadata: chargeMetadata
+            }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
             await emailGiftToRecipient({
                 cardId: card.cardId,
                 recipientEmail: params.recipientEmail,
@@ -98,24 +110,13 @@ router.route("/v1/turnkey/purchaseGiftcard")
         };
     });
 
-async function createCard(charge, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig): Promise<Card> {
+async function createCard(userSuppliedId: string, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig, metadata?: any): Promise<Card> {
     const cardParams: CreateCardParams = {
-        userSuppliedId: charge.id,
+        userSuppliedId: userSuppliedId,
         cardType: Card.CardType.GIFT_CARD,
         initialValue: params.initialValue,
         programId: config.programId,
-        metadata: {
-            sender: {
-                name: params.senderName,
-                email: params.senderEmail,
-            },
-            recipient: {
-                email: params.recipientEmail
-            },
-            charge: {
-                chargeId: charge.id,
-            }
-        }
+        metadata: metadata
     };
     console.log(`Creating card with params ${JSON.stringify(cardParams)}.`);
     const card: Card = await lightrail.cards.createCard(cardParams);
