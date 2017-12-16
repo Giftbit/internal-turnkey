@@ -23,6 +23,13 @@ import {Charge} from "../../utils/stripedtos/Charge";
 import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
 import {StripeModeConfig} from "../../utils/stripedtos/StripeConfig";
 import {formatCurrency} from "../../utils/currencyUtils";
+import * as minfraudUtils from "../../utils/minfraudUtils";
+import {
+    getMinfraudParamsForGiftcardPurchase,
+    GiftcardPurchaseFraudCheckParams,
+    MinfraudConfig
+} from "../../utils/minfraudUtils";
+// import {getScore} from
 
 export const router = new cassava.Router();
 
@@ -32,16 +39,20 @@ const authConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("S
 const roleDefinitionsPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS");
 const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN");
 const assumeGiftcardPurchaseToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN");
+const minfraudConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<MinfraudConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_MINFRAUD");
 router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`, assumeGetSharedSecretToken));
 router.route("/v1/turnkey/purchaseGiftcard")
     .method("POST")
     .handler(async evt => {
         console.log("Received request:" + JSON.stringify(evt));
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
-        metrics.histogram("turnkey.giftcardpurchase", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
+        const tags = `mode:${auth.isTestUser() ? "test" : "live"}`;
+        console.log(`mode: ${auth.isTestUser()}, tags: ${tags}`);
+        metrics.histogram("turnkey.giftcardpurchase", 1, [tags]);
         metrics.flush();
         auth.requireIds("giftbitUserId");
         auth.requireScopes("lightrailV1:purchaseGiftcard");
+
         const authorizeAs: string = evt.meta["auth-token"].split(".")[1];
         const assumeToken = (await assumeGiftcardPurchaseToken).assumeToken;
 
@@ -69,6 +80,26 @@ router.route("/v1/turnkey/purchaseGiftcard")
         }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
 
         let card: Card;
+
+        try {
+            if (!passesFraudCheck({
+                    request: evt,
+                    charge: charge,
+                    userId: auth.merchantId,
+                    senderEmail: params.senderEmail,
+                    name: params.senderName
+                })) {
+                await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, 'The order failed fraud check.');
+                throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge card in Stripe.", "ChargeFailed");
+            }
+        } catch (err) {
+            if (err instanceof GiftbitRestError) {
+                throw err
+            } else {
+                console.log(`error occurred during fraud check. ${err}`)
+            }
+        }
+
         try {
             const cardMetadata = {
                 ...chargeAndCardCoreMetadata,
@@ -220,4 +251,10 @@ async function rollback(lightrailStripeConfig: StripeModeConfig, merchantStripeC
         const cancel = await lightrail.cards.cancelCard(card, card.cardId + "-cancel");
         console.log(`Cancelled card ${card.cardId}. Cancel response: ${cancel}.`);
     }
+}
+
+async function passesFraudCheck(params: GiftcardPurchaseFraudCheckParams): Promise<boolean> {
+    const score = await minfraudUtils.getScore(getMinfraudParamsForGiftcardPurchase(params), minfraudConfigPromise);
+    console.log(`Fraud score: ${JSON.stringify(score)}`);
+    return true
 }
