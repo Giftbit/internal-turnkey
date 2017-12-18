@@ -23,13 +23,12 @@ import {Charge} from "../../utils/stripedtos/Charge";
 import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
 import {StripeModeConfig} from "../../utils/stripedtos/StripeConfig";
 import {formatCurrency} from "../../utils/currencyUtils";
-import * as minfraudUtils from "../../utils/minfraudUtils";
 import {
     getMinfraudParamsForGiftcardPurchase,
-    GiftcardPurchaseFraudCheckParams,
-    MinfraudConfig
-} from "../../utils/minfraudUtils";
-// import {getScore} from
+    GiftcardPurchaseFraudCheckParams
+} from "../../utils/giftcardPurchaseFraudCheckUtils";
+import {MinfraudConfig} from "../../utils/minfraud/MinfraudConfig";
+import {getScore} from "../../utils/minfraud/minfraudUtils";
 
 export const router = new cassava.Router();
 
@@ -81,23 +80,15 @@ router.route("/v1/turnkey/purchaseGiftcard")
 
         let card: Card;
 
-        try {
-            if (!passesFraudCheck({
-                    request: evt,
-                    charge: charge,
-                    userId: auth.merchantId,
-                    senderEmail: params.senderEmail,
-                    name: params.senderName
-                })) {
-                await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, 'The order failed fraud check.');
-                throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge card in Stripe.", "ChargeFailed");
-            }
-        } catch (err) {
-            if (err instanceof GiftbitRestError) {
-                throw err
-            } else {
-                console.log(`error occurred during fraud check. ${err}`)
-            }
+        if (!await passesFraudCheck({
+                request: evt,
+                charge: charge,
+                userId: auth.merchantId,
+                senderEmail: params.senderEmail,
+                name: params.senderName
+            })) {
+            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, 'The order failed fraud check.');
+            throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card.", "ChargeFailed")
         }
 
         try {
@@ -254,7 +245,18 @@ async function rollback(lightrailStripeConfig: StripeModeConfig, merchantStripeC
 }
 
 async function passesFraudCheck(params: GiftcardPurchaseFraudCheckParams): Promise<boolean> {
-    const score = await minfraudUtils.getScore(getMinfraudParamsForGiftcardPurchase(params), minfraudConfigPromise);
-    console.log(`Fraud score: ${JSON.stringify(score)}`);
-    return true
+    try {
+        const score = await getScore(getMinfraudParamsForGiftcardPurchase(params), minfraudConfigPromise);
+        console.log(`Minfraud score: ${JSON.stringify(score)}`);
+        if (score.riskScore > 99 || score.ipRiskScore > 99 /* The range is [0.1-99] so it's not possible for this to happen. */) {
+            console.log("Minfraud score above allowed range.");
+            return false
+        } else {
+            console.log("Minfraud score was within allowed range.");
+            return true
+        }
+    } catch (err) {
+        console.log(`Unexpected error occurred during fraud check. Simply logging the exception and carrying on with request. ${err}`);
+        return true
+    }
 }
