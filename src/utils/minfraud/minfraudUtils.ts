@@ -22,7 +22,7 @@ export async function getScore(minfraudScoreParams: MinfraudScoreParams, minfrau
             ipRiskScore: resp.body.ip_address.riskScore
         };
     } else {
-        console.log("Skipping minfraud check since config is set to skip.")
+        console.log("Skipping minfraud check since config is set to skip. Returning minimum risk scores");
         return {
             riskScore: 0.1,
             ipRiskScore: 0.1

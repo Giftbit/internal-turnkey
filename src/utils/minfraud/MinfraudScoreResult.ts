@@ -1,4 +1,4 @@
 export interface MinfraudScoreResult {
-    risk: number
-    ipRisk: number
+    riskScore: number
+    ipRiskScore: number
 }

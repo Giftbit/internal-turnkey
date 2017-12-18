@@ -45,9 +45,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
     .handler(async evt => {
         console.log("Received request:" + JSON.stringify(evt));
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
-        const tags = `mode:${auth.isTestUser() ? "test" : "live"}`;
-        console.log(`mode: ${auth.isTestUser()}, tags: ${tags}`);
-        metrics.histogram("turnkey.giftcardpurchase", 1, [tags]);
+        metrics.histogram("turnkey.giftcardpurchase", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
         metrics.flush();
         auth.requireIds("giftbitUserId");
         auth.requireScopes("lightrailV1:purchaseGiftcard");
