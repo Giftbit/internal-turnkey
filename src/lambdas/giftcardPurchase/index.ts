@@ -246,7 +246,7 @@ async function passesFraudCheck(params: GiftcardPurchaseFraudCheckParams): Promi
     try {
         const score = await getScore(getMinfraudParamsForGiftcardPurchase(params), minfraudConfigPromise);
         console.log(`Minfraud score: ${JSON.stringify(score)}`);
-        if (score.riskScore > 99 || score.ipRiskScore > 99 /* The range is [0.1-99] so it's not possible for this to happen. */) {
+        if (score.riskScore > 70 || score.ipRiskScore > 70 /* The range is [0.1-99] and represents the likelihood of the purchase being fraudulent. 70 = 70% likely to be fraudulent. */) {
             console.log("Minfraud score above allowed range.");
             return false
         } else {
