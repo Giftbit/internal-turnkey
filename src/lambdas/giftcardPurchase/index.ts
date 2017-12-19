@@ -78,7 +78,8 @@ router.route("/v1/turnkey/purchaseGiftcard")
 
         let card: Card;
 
-        if (!auth.isTestUser() && !await passesFraudCheck({
+        //!auth.isTestUser() &&
+        if (!await passesFraudCheck({
                 request: evt,
                 charge: charge,
                 userId: auth.merchantId,
