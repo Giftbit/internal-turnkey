@@ -44,6 +44,9 @@ Parameters:
   SecureConfigKeyStripe:
     Type: String
     Description: Key of the Stripe Connect secure config object in S3
+  SecureConfigKeyMinfraud:
+    Type: String
+    Description: Key of the Minfraud API key secure config object in S3
   SecureConfigKmsArn:
     Type: String
     Description: Optional ARN of the KMS encrypting the S3 bucket
@@ -91,6 +94,7 @@ Resources:
           SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN: !Ref SecureConfigKeyAssumeStorageScopeToken
           SECURE_CONFIG_KEY_SENTRY: !Ref SecureConfigKeySentry
           SECURE_CONFIG_KEY_STRIPE: !Ref SecureConfigKeyStripe
+          SECURE_CONFIG_KEY_MINFRAUD: !Ref SecureConfigKeyMinfraud
           LIGHTRAIL_EMAIL_DOMAIN_NAME: !Ref EmailDomainName
       Policies:
         - Version: 2012-10-17
@@ -106,6 +110,7 @@ Resources:
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyJwt}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyRoleDefinitions}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyStripe}"
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyMinfraud}"
             - Effect: Allow
               Action:
                 - kms:Decrypt
