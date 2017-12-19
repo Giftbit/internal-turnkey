@@ -21,7 +21,7 @@ export interface Charge {
     on_behalf_of: any;
     order: any;
     outcome: any;
-    paid: true;
+    paid: boolean;
     receipt_email: any;
     receipt_number: any;
     refunded: any;

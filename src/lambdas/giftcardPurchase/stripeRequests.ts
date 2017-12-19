@@ -17,7 +17,7 @@ export async function createCharge(params: StripeCreateChargeParams, lightrailSt
     } catch (err) {
         switch (err.type) {
             case "StripeCardError":
-                throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge card in Stripe.", "ChargeFailed");
+                throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card..", "ChargeFailed");
             case "StripeInvalidRequestError":
                 throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "The stripeCardToken was invalid.", "StripeInvalidRequestError");
             case "RateLimitError":
@@ -30,7 +30,7 @@ export async function createCharge(params: StripeCreateChargeParams, lightrailSt
     if (charge.review) {
         console.log(`Charge was flagged for a review in stripe. Will now refund.`);
         await createRefund(charge.id, lightrailStripeSecretKey, merchantStripeAccountId, 'Refunded since the charge was flagged for a manual review in Stripe. The gift card has not been issued.');
-        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge card in Stripe.", "ChargeFailed");
+        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card.", "ChargeFailed");
     }
     return charge;
 }
