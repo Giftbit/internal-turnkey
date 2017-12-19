@@ -10,6 +10,7 @@ import {MinfraudScoreResult} from "./MinfraudScoreResult";
  */
 export async function getScore(minfraudScoreParams: MinfraudScoreParams, minfraudConfigPromise: Promise<MinfraudConfig>): Promise<MinfraudScoreResult> {
     const minfraudConfig = await minfraudConfigPromise;
+    console.log(`minfraud config: ${JSON.stringify(minfraudConfig)}`);
     if (minfraudConfig.doMinfraudChecks) {
         console.log(`Preforming minfraud check. Params: ${JSON.stringify(minfraudScoreParams)}`);
         const auth = Buffer.from(`${minfraudConfig.userId}:${minfraudConfig.licenseKey}`).toString("base64");
