@@ -23,6 +23,12 @@ import {Charge} from "../../utils/stripedtos/Charge";
 import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
 import {StripeModeConfig} from "../../utils/stripedtos/StripeConfig";
 import {formatCurrency} from "../../utils/currencyUtils";
+import {
+    getMinfraudParamsForGiftcardPurchase,
+    GiftcardPurchaseFraudCheckParams
+} from "../../utils/giftcardPurchaseFraudCheckUtils";
+import {MinfraudConfig} from "../../utils/minfraud/MinfraudConfig";
+import {getScore} from "../../utils/minfraud/minfraudUtils";
 
 export const router = new cassava.Router();
 
@@ -32,6 +38,7 @@ const authConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("S
 const roleDefinitionsPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS");
 const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN");
 const assumeGiftcardPurchaseToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN");
+const minfraudConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<MinfraudConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_MINFRAUD");
 router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`, assumeGetSharedSecretToken));
 router.route("/v1/turnkey/purchaseGiftcard")
     .method("POST")
@@ -42,6 +49,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
         metrics.flush();
         auth.requireIds("giftbitUserId");
         auth.requireScopes("lightrailV1:purchaseGiftcard");
+
         const authorizeAs: string = evt.meta["auth-token"].split(".")[1];
         const assumeToken = (await assumeGiftcardPurchaseToken).assumeToken;
 
@@ -69,6 +77,19 @@ router.route("/v1/turnkey/purchaseGiftcard")
         }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
 
         let card: Card;
+
+        //!auth.isTestUser() &&
+        if (!await passesFraudCheck({
+                request: evt,
+                charge: charge,
+                userId: auth.merchantId,
+                senderEmail: params.senderEmail,
+                name: params.senderName
+            })) {
+            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, 'The order failed fraud check.');
+            throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card.", "ChargeFailed")
+        }
+
         try {
             const cardMetadata = {
                 ...chargeAndCardCoreMetadata,
@@ -219,5 +240,22 @@ async function rollback(lightrailStripeConfig: StripeModeConfig, merchantStripeC
     if (card) {
         const cancel = await lightrail.cards.cancelCard(card, card.cardId + "-cancel");
         console.log(`Cancelled card ${card.cardId}. Cancel response: ${cancel}.`);
+    }
+}
+
+async function passesFraudCheck(params: GiftcardPurchaseFraudCheckParams): Promise<boolean> {
+    try {
+        const score = await getScore(getMinfraudParamsForGiftcardPurchase(params), minfraudConfigPromise);
+        console.log(`Minfraud score: ${JSON.stringify(score)}`);
+        if (score.riskScore > 70 || score.ipRiskScore > 70 /* The range is [0.1-99] and represents the likelihood of the purchase being fraudulent. 70 = 70% likely to be fraudulent. */) {
+            console.log("Minfraud score above allowed range.");
+            return false
+        } else {
+            console.log("Minfraud score was within allowed range.");
+            return true
+        }
+    } catch (err) {
+        console.log(`Unexpected error occurred during fraud check. Simply logging the exception and carrying on with request. ${err}`);
+        return true
     }
 }
