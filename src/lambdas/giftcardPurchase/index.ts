@@ -23,12 +23,13 @@ import {Charge} from "../../utils/stripedtos/Charge";
 import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
 import {StripeModeConfig} from "../../utils/stripedtos/StripeConfig";
 import {formatCurrency} from "../../utils/currencyUtils";
-import {
-    getMinfraudParamsForGiftcardPurchase,
-    GiftcardPurchaseFraudCheckParams
-} from "../../utils/giftcardPurchaseFraudCheckUtils";
+import {getMinfraudParamsForGiftcardPurchase} from "../../utils/giftcardPurchaseFraudCheckUtils";
 import {MinfraudConfig} from "../../utils/minfraud/MinfraudConfig";
 import {getScore} from "../../utils/minfraud/minfraudUtils";
+import {AuthorizationBadge} from "giftbit-cassava-routes/dist/jwtauth";
+import {MinfraudScoreParams} from "../../utils/minfraud/MinfraudScoreParams";
+import {MinfraudScoreResult} from "../../utils/minfraud/MinfraudScoreResult";
+import {sendEvent} from "../../utils/eventUtils";
 
 export const router = new cassava.Router();
 
@@ -78,16 +79,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
 
         let card: Card;
 
-        if (!auth.isTestUser() && !await passesFraudCheck({
-                request: evt,
-                charge: charge,
-                userId: auth.merchantId,
-                senderEmail: params.senderEmail,
-                name: params.senderName
-            })) {
-            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, 'The order failed fraud check.');
-            throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card.", "ChargeFailed")
-        }
+        await doFraudCheck(lightrailStripeConfig, merchantStripeConfig, params, charge, evt, auth);
 
         try {
             const cardMetadata = {
@@ -242,19 +234,53 @@ async function rollback(lightrailStripeConfig: StripeModeConfig, merchantStripeC
     }
 }
 
-async function passesFraudCheck(params: GiftcardPurchaseFraudCheckParams): Promise<boolean> {
-    try {
-        const score = await getScore(getMinfraudParamsForGiftcardPurchase(params), minfraudConfigPromise);
-        console.log(`Minfraud score: ${JSON.stringify(score)}`);
-        if (score.riskScore > 70 || score.ipRiskScore > 70 /* The range is [0.1-99] and represents the likelihood of the purchase being fraudulent. 70 = 70% likely to be fraudulent. */) {
-            console.log("Minfraud score above allowed range.");
-            return false
-        } else {
-            console.log("Minfraud score was within allowed range.");
-            return true
+async function doFraudCheck(lightrailStripeConfig: StripeModeConfig, merchantStripeConfig: StripeAuth, giftcardPurchaseParams: GiftcardPurchaseParams, charge: Charge, request: RouterEvent, auth: AuthorizationBadge): Promise<void> {
+    const minfraudScoreParams: MinfraudScoreParams = getMinfraudParamsForGiftcardPurchase({
+        request: request,
+        charge: charge,
+        userId: auth.merchantId,
+        recipientEmail: giftcardPurchaseParams.recipientEmail,
+        name: giftcardPurchaseParams.senderName
+    });
+
+    const passedStripeCheck = doStripeCheck(charge);
+    let passedMinfraudCheck: boolean;
+    let minfraudScore: MinfraudScoreResult;
+
+    if (!auth.isTestUser()) {
+        try {
+            minfraudScore = await getScore(minfraudScoreParams, minfraudConfigPromise);
+            if (minfraudScore.riskScore > 70 || minfraudScore.ipRiskScore > 70 /* The range is [0.1-99] and represents the likelihood of the purchase being fraudulent. 70 = 70% likely to be fraudulent. */) {
+                console.log("Minfraud score above allowed range.");
+                passedMinfraudCheck = false
+            } else {
+                console.log("Minfraud score was within allowed range.");
+                passedMinfraudCheck = true
+            }
+        } catch (err) {
+            console.log(`Unexpected error occurred during fraud check. Simply logging the exception and carrying on with request. ${err}`);
         }
-    } catch (err) {
-        console.log(`Unexpected error occurred during fraud check. Simply logging the exception and carrying on with request. ${err}`);
+    }
+
+    const passedFraudCheck = passedStripeCheck && passedMinfraudCheck;
+    await sendEvent("dropin.giftcard.purchase.fraudcheck", charge.id, {
+        giftcardPurchaseParams: giftcardPurchaseParams,
+        minfraudScoreParams: minfraudScoreParams,
+        minfraudScore: minfraudScore,
+        passedFraudCheck: passedFraudCheck
+    });
+    // sendEvent(giftCardPurchaseParams, fraudCheckParams, passedFraudCheck)
+    if (!passedFraudCheck) {
+        await rollback(lightrailStripeConfig, merchantStripeConfig, charge, null, 'The order failed fraud check.');
+        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card.", "ChargeFailed");
+    }
+}
+
+function doStripeCheck(charge: Charge): boolean {
+    if (charge.review) {
+        console.log(`Charge was flagged for a review in stripe. Will now refund.`);
+        return false
+    } else {
         return true
     }
 }
