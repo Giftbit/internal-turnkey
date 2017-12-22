@@ -244,7 +244,7 @@ async function doFraudCheck(lightrailStripeConfig: StripeModeConfig, merchantStr
     });
 
     const passedStripeCheck = doStripeCheck(charge);
-    let passedMinfraudCheck: boolean;
+    let passedMinfraudCheck: boolean = true;
     let minfraudScore: MinfraudScoreResult;
 
     if (!auth.isTestUser()) {
