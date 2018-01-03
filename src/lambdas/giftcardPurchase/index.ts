@@ -235,6 +235,9 @@ async function rollback(lightrailStripeConfig: StripeModeConfig, merchantStripeC
 }
 
 async function doFraudCheck(lightrailStripeConfig: StripeModeConfig, merchantStripeConfig: StripeAuth, giftcardPurchaseParams: GiftcardPurchaseParams, charge: Charge, request: RouterEvent, auth: AuthorizationBadge): Promise<void> {
+    const passedStripeCheck = passesStripeCheck(charge);
+
+    let passedMinfraudCheck: boolean = true;
     const minfraudScoreParams: MinfraudScoreParams = getMinfraudParamsForGiftcardPurchase({
         request: request,
         charge: charge,
@@ -242,9 +245,6 @@ async function doFraudCheck(lightrailStripeConfig: StripeModeConfig, merchantStr
         recipientEmail: giftcardPurchaseParams.recipientEmail,
         name: giftcardPurchaseParams.senderName
     });
-
-    const passedStripeCheck = doStripeCheck(charge);
-    let passedMinfraudCheck: boolean = true;
     let minfraudScore: MinfraudScoreResult;
 
     if (!auth.isTestUser()) {
@@ -263,20 +263,19 @@ async function doFraudCheck(lightrailStripeConfig: StripeModeConfig, merchantStr
     }
 
     const passedFraudCheck = passedStripeCheck && passedMinfraudCheck;
-    await sendEvent("dropin.giftcard.purchase.fraudcheck", charge.id, {
+    await sendEvent("event.dropingiftcard.purchase.fraudcheck", charge.id, {
         giftcardPurchaseParams: giftcardPurchaseParams,
         minfraudScoreParams: minfraudScoreParams,
         minfraudScore: minfraudScore,
         passedFraudCheck: passedFraudCheck
     });
-    // sendEvent(giftCardPurchaseParams, fraudCheckParams, passedFraudCheck)
     if (!passedFraudCheck) {
         await rollback(lightrailStripeConfig, merchantStripeConfig, charge, null, 'The order failed fraud check.');
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card.", "ChargeFailed");
     }
 }
 
-function doStripeCheck(charge: Charge): boolean {
+function passesStripeCheck(charge: Charge): boolean {
     if (charge.review) {
         console.log(`Charge was flagged for a review in stripe. Will now refund.`);
         return false
