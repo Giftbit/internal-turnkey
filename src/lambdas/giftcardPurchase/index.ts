@@ -277,7 +277,6 @@ async function doFraudCheck(lightrailStripeConfig: StripeModeConfig, merchantStr
 
 function passesStripeCheck(charge: Charge): boolean {
     if (charge.review) {
-        console.log(`Charge was flagged for a review in stripe. Will now refund.`);
         return false
     } else {
         return true
