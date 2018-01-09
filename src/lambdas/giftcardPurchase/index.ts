@@ -256,12 +256,17 @@ async function doFraudCheck(lightrailStripeConfig: StripeModeConfig, merchantStr
     let passedMinfraudCheck = passesMinfraudCheck(minfraudScore);
 
     const passedFraudCheck = passedStripeCheck && passedMinfraudCheck;
-    await lambdaComsLib.putMessage("event.dropingiftcard.purchase.fraudcheck", charge.id, {
+    const messagePayload = {
         giftcardPurchaseParams: giftcardPurchaseParams,
         minfraudScoreParams: minfraudScoreParams,
         minfraudScore: minfraudScore,
         passedFraudCheck: passedFraudCheck
-    }, lambdaComsLib.kinesisStreamArnToName(process.env["KINESIS_STREAM_ARN"]));
+    };
+    try {
+        await lambdaComsLib.putMessage("event.dropingiftcard.purchase.fraudcheck", charge.id, messagePayload, lambdaComsLib.kinesisStreamArnToName(process.env["KINESIS_STREAM_ARN"]));
+    } catch (err) {
+        console.log(`Exception ${err} occurred while attempting to put ${JSON.stringify(messagePayload)} on kinesis stream. Kinesis Stream Arn = ${process.env["KINESIS_STREAM_ARN"]}.`)
+    }
     if (!passedFraudCheck) {
         await rollback(lightrailStripeConfig, merchantStripeConfig, charge, null, 'The order failed fraud check.');
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card.", "ChargeFailed");
