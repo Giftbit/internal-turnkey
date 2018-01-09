@@ -3,6 +3,7 @@ import * as cassava from "cassava";
 import {httpStatusCode, RestError, RouterEvent} from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as lightrail from "lightrail-client";
+import * as lambdaComsLib from "giftbit-lambda-comslib";
 import {Card} from "lightrail-client/dist/model";
 import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
 import * as giftcardPurchaseParams from "./GiftcardPurchaseParams";
@@ -29,7 +30,6 @@ import {getScore} from "../../utils/minfraud/minfraudUtils";
 import {AuthorizationBadge} from "giftbit-cassava-routes/dist/jwtauth";
 import {MinfraudScoreParams} from "../../utils/minfraud/MinfraudScoreParams";
 import {MinfraudScoreResult} from "../../utils/minfraud/MinfraudScoreResult";
-import {sendEvent} from "../../utils/eventUtils";
 
 export const router = new cassava.Router();
 
@@ -237,7 +237,6 @@ async function rollback(lightrailStripeConfig: StripeModeConfig, merchantStripeC
 async function doFraudCheck(lightrailStripeConfig: StripeModeConfig, merchantStripeConfig: StripeAuth, giftcardPurchaseParams: GiftcardPurchaseParams, charge: Charge, request: RouterEvent, auth: AuthorizationBadge): Promise<void> {
     const passedStripeCheck = passesStripeCheck(charge);
 
-    let passedMinfraudCheck: boolean = true;
     const minfraudScoreParams: MinfraudScoreParams = getMinfraudParamsForGiftcardPurchase({
         request: request,
         charge: charge,
@@ -250,35 +249,40 @@ async function doFraudCheck(lightrailStripeConfig: StripeModeConfig, merchantStr
     if (!auth.isTestUser()) {
         try {
             minfraudScore = await getScore(minfraudScoreParams, minfraudConfigPromise);
-            if (minfraudScore.riskScore > 70 || minfraudScore.ipRiskScore > 70 /* The range is [0.1-99] and represents the likelihood of the purchase being fraudulent. 70 = 70% likely to be fraudulent. */) {
-                console.log("Minfraud score above allowed range.");
-                passedMinfraudCheck = false
-            } else {
-                console.log("Minfraud score was within allowed range.");
-                passedMinfraudCheck = true
-            }
         } catch (err) {
             console.log(`Unexpected error occurred during fraud check. Simply logging the exception and carrying on with request. ${err}`);
         }
     }
+    let passedMinfraudCheck = passesMinfraudCheck(minfraudScore);
 
     const passedFraudCheck = passedStripeCheck && passedMinfraudCheck;
-    await sendEvent("event.dropingiftcard.purchase.fraudcheck", charge.id, {
+    await lambdaComsLib.putMessage("event.dropingiftcard.purchase.fraudcheck", charge.id, {
         giftcardPurchaseParams: giftcardPurchaseParams,
         minfraudScoreParams: minfraudScoreParams,
         minfraudScore: minfraudScore,
         passedFraudCheck: passedFraudCheck
-    });
+    }, lambdaComsLib.kinesisStreamArnToName(process.env["KINESIS_STREAM_ARN"]));
     if (!passedFraudCheck) {
         await rollback(lightrailStripeConfig, merchantStripeConfig, charge, null, 'The order failed fraud check.');
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card.", "ChargeFailed");
     }
 }
 
-function passesStripeCheck(charge: Charge): boolean {
-    if (charge.review) {
-        return false
-    } else {
+function passesMinfraudCheck(minfraudScore: MinfraudScoreResult): boolean {
+    if (!minfraudScore) {
+        console.log("No minfraud score received. Skipping check.");
         return true
+    } else {
+        if (minfraudScore.riskScore > 70 || minfraudScore.ipRiskScore > 70 /* The range is [0.1-99] and represents the likelihood of the purchase being fraudulent. 70 = 70% likely to be fraudulent. */) {
+            console.log("Minfraud score above allowed range.");
+            return false
+        } else {
+            console.log("Minfraud score was within allowed range.");
+            return true
+        }
     }
+}
+
+function passesStripeCheck(charge: Charge): boolean {
+    return !charge.review;
 }
