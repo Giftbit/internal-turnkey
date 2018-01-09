@@ -15,7 +15,7 @@ Parameters:
     Default: ""
   KinesisStreamArn:
     Type: String
-    Description: The AWS ARN of the Kinesis stream of Card events to roll up.
+    Description: The AWS ARN of the Kinesis stream for Lightrail events.
     AllowedPattern: arn:aws:kinesis:[a-zA-Z_0-9\-]+:\d{12}:stream/[a-zA-Z_0-9+=,.@\-_/]+
   LightrailWebappDomain:
     Type: String
