@@ -16,7 +16,7 @@ export async function getScore(minfraudScoreParams: MinfraudScoreParams, minfrau
         const resp = await superagent.post("https://minfraud.maxmind.com/minfraud/v2.0/score")
             .set("Authorization", `Basic ${auth}`)
             .send(minfraudScoreParams);
-        console.log(`Minfraud result: ${JSON.stringify(resp.body)}`);
+        console.log(`Minfraud score: ${JSON.stringify(resp.body)}`);
         return {
             riskScore: resp.body.risk_score,
             ipRiskScore: resp.body.ip_address.riskScore
