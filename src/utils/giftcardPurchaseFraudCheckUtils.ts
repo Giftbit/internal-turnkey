@@ -8,8 +8,8 @@ export function getMinfraudParamsForGiftcardPurchase(params: GiftcardPurchaseFra
         event: {type: "purchase" /* this is an enum from minfraud*/, transaction_id: params.charge.id},
         account: {user_id: params.userId},
         email: {
-            address: params.senderEmail, // .replace(/@.*/, "")
-            domain: params.senderEmail.replace(/.*@/, "")
+            address: params.recipientEmail, // .replace(/@.*/, "")
+            domain: params.recipientEmail.replace(/.*@/, "")
         },
         billing: {
             first_name: params.name ? params.name.split(' ').slice(0, -1).join(' ') : "",
@@ -41,7 +41,7 @@ export interface GiftcardPurchaseFraudCheckParams {
     request: RouterEvent
     charge: Charge
     userId: string
-    senderEmail: string
+    recipientEmail: string
     name?: string
 }
 
