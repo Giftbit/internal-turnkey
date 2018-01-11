@@ -36,9 +36,11 @@ Parameters:
   SecureConfigKeyDataDog:
     Type: String
     Description: Key of the DataDog API key secure config object in S3
+    Default: "datadog.json"
   SecureConfigKeySentry:
     Type: String
     Description: Key of the Sentry API key secure config object in S3
+    Default: "sentry_lambda_services.json"
   SecureConfigKeyJwt:
     Type: String
     Description: Key of the JWT secure config object in S3
@@ -48,9 +50,11 @@ Parameters:
   SecureConfigKeyStripe:
     Type: String
     Description: Key of the Stripe Connect secure config object in S3
+    Default: "stripe_connect.json"
   SecureConfigKeyMinfraud:
     Type: String
     Description: Key of the Minfraud API key secure config object in S3
+    Default: "minfraud.json"
   SecureConfigKmsArn:
     Type: String
     Description: Optional ARN of the KMS encrypting the S3 bucket
