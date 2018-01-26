@@ -135,7 +135,7 @@ async function createCard(userSuppliedId: string, params: GiftcardPurchaseParams
     console.log(`Creating card with params ${JSON.stringify(cardParams)}.`);
     const card: Card = await lightrail.cards.createCard(cardParams);
     console.log(`Created card ${JSON.stringify(card)}.`);
-    return Promise.resolve(card);
+    return card;
 }
 
 function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeModeConfig) {
@@ -189,7 +189,7 @@ async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: 
         replyToAddress: turnkeyConfig.giftEmailReplyToAddress,
     });
     console.log(`Email sent. MessageId: ${sendEmailResponse.MessageId}.`);
-    return Promise.resolve(sendEmailResponse);
+    return sendEmailResponse;
 }
 
 //noinspection JSUnusedGlobalSymbols

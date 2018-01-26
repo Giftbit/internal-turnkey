@@ -41,7 +41,7 @@ export async function updateCharge(chargeId: string, params: StripeUpdateChargeP
     );
     // todo make this a DTO.
     console.log(`Updated charge ${JSON.stringify(chargeUpdate)}.`);
-    return Promise.resolve(chargeUpdate);
+    return chargeUpdate;
 }
 
 export async function createRefund(chargeId: string, lightrailStripeSecretKey: string, merchantStripeAccountId: string, reason?: string): Promise<Refund> {
