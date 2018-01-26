@@ -3,6 +3,7 @@ import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 
 export interface TurnkeyPublicConfig {
     additionalInfo: string;
+    checkCardLink?: string; // optional
     claimLink: string;
     companyName: string;
     companyWebsiteUrl: string;
@@ -20,6 +21,7 @@ export interface TurnkeyPublicConfig {
 }
 
 export const FULLCODE_REPLACMENT_STRING = "{{fullcode}}";
+export const CHECK_CARD_AUTH_REPLACEMENT_STRING = "{{token}}";
 
 /**
  * Validates all config parameters are correctly set.
@@ -32,9 +34,13 @@ export function validateTurnkeyConfig(config: TurnkeyPublicConfig): void {
         console.log("turnkey config cannot be null");
         throw new GiftbitRestError(424, "Config was not set.", "MissingConfig");
     }
+    if (config.checkCardLink && !config.checkCardLink.includes(CHECK_CARD_AUTH_REPLACEMENT_STRING)) {
+        console.log(`turnkey config checkStatusLink must contain ${CHECK_CARD_AUTH_REPLACEMENT_STRING} for replacement.`);
+        throw new GiftbitRestError(424, `Config claimLink must be set and contain ${CHECK_CARD_AUTH_REPLACEMENT_STRING} for replacement.`, "InvalidCheckCardLink");
+    }
     if (!config.claimLink || !config.claimLink.includes(FULLCODE_REPLACMENT_STRING)) {
-        console.log(`turnkey config claimLink must contain {{fullcode}} for replacement.`);
-        throw new GiftbitRestError(424, "Config claimLink must be set and contain {{fullcode}} for replacement.", "InvalidClaimLink");
+        console.log(`turnkey config claimLink must contain ${FULLCODE_REPLACMENT_STRING} for replacement.`);
+        throw new GiftbitRestError(424, `Config claimLink must be set and contain ${FULLCODE_REPLACMENT_STRING} for replacement.`, "InvalidClaimLink");
     }
     if (!config.companyName) {
         console.log("turnkey config companyName cannot be null");

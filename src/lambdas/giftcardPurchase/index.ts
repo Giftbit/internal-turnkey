@@ -9,7 +9,10 @@ import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
 import * as giftcardPurchaseParams from "./GiftcardPurchaseParams";
 import {GiftcardPurchaseParams} from "./GiftcardPurchaseParams";
 import {RECIPIENT_EMAIL} from "./RecipientEmail";
-import {FULLCODE_REPLACMENT_STRING, TurnkeyPublicConfig, validateTurnkeyConfig} from "../../utils/TurnkeyConfig";
+import {
+    CHECK_CARD_AUTH_REPLACEMENT_STRING, FULLCODE_REPLACMENT_STRING, TurnkeyPublicConfig,
+    validateTurnkeyConfig
+} from "../../utils/TurnkeyConfig";
 import * as kvsAccess from "../../utils/kvsAccess";
 import * as stripeAccess from "../../utils/stripeAccess";
 import {EmailGiftCardParams} from "./EmailGiftCardParams";
@@ -30,6 +33,7 @@ import {getScore} from "../../utils/minfraud/minfraudUtils";
 import {AuthorizationBadge} from "giftbit-cassava-routes/dist/jwtauth";
 import {MinfraudScoreParams} from "../../utils/minfraud/MinfraudScoreParams";
 import {MinfraudScoreResult} from "../../utils/minfraud/MinfraudScoreResult";
+import {EmailReceiptParams} from "./EmailReceiptParams";
 
 export const router = new cassava.Router();
 
@@ -111,6 +115,12 @@ router.route("/v1/turnkey/purchaseGiftcard")
                 senderName: params.senderName,
                 initialValue: params.initialValue
             }, config);
+            await emailReceiptToSender({
+                recipientEmail: params.recipientEmail,
+                senderName: params.senderName,
+                senderEmail: params.senderEmail,
+                token: "I_AM_A_LIGHTRAIL_CARD_TOKEN"
+            }, config);
         } catch (err) {
             console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
             await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, `Refunded due to an unexpected error during the gift card delivery step. The gift card ${card.cardId} will be cancelled in Lightrail.`);
@@ -189,6 +199,24 @@ async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: 
         replyToAddress: turnkeyConfig.giftEmailReplyToAddress,
     });
     console.log(`Email sent. MessageId: ${sendEmailResponse.MessageId}.`);
+    return sendEmailResponse;
+}
+
+async function emailReceiptToSender(params: EmailReceiptParams, turnkeyConfig: TurnkeyPublicConfig): Promise<SendEmailResponse> {
+    if (!turnkeyConfig.checkCardLink) {
+        return null;
+    }
+
+    const checkCardLink = turnkeyConfig.checkCardLink.replace(CHECK_CARD_AUTH_REPLACEMENT_STRING, params.token);
+    const subject = `${turnkeyConfig.companyName} gift card receipt`;
+    const body = `You sent a gift card to ${params.recipientEmail}.  Check on the status of the gift card (and resend if Jeff gets to it) at ${checkCardLink}`;
+
+    const sendEmailResponse = await sendEmail({
+        toAddress: params.recipientEmail,
+        subject,
+        body,
+        replyToAddress: turnkeyConfig.giftEmailReplyToAddress,
+    });
     return sendEmailResponse;
 }
 
