@@ -57,5 +57,5 @@ export async function createRefund(chargeId: string, lightrailStripeSecretKey: s
         description: reason
     }, lightrailStripeSecretKey, merchantStripeAccountId);
     console.log(JSON.stringify(refund));
-    return refund
+    return refund;
 }

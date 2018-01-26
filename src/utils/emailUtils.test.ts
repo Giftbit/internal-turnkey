@@ -38,10 +38,13 @@ describe("test email validator", () => {
         {email: "email@domain..com", isValid: false, message: "Multiple dot in the domain portion is invalid"},
     ];
 
-    for (const testCase of testCases) {
-        it(`test ${testCase.isValid ? "is" : "not"} valid. Case: ${testCase.message}`, () => {
-            const isValid: boolean = isValidEmailAddress(testCase.email);
-            chai.assert.equal(isValid, testCase.isValid);
-        });
-    }
+    describe("is valid", () => {
+        testCases.filter(t => t.isValid)
+            .forEach(t => it(t.message, () => chai.assert.isTrue(isValidEmailAddress(t.email))));
+    });
+
+    describe("is not valid", () => {
+        testCases.filter(t => !t.isValid)
+            .forEach(t => it(t.message, () => chai.assert.isFalse(isValidEmailAddress(t.email))));
+    });
 });
