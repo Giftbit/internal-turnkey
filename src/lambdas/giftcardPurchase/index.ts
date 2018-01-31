@@ -46,13 +46,13 @@ const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVa
 const assumeGiftcardPurchaseToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN");
 const minfraudConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<MinfraudConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_MINFRAUD");
 router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`, assumeGetSharedSecretToken));
-router.route("/v1/turnkey/purchaseGiftcard")
+router.route("/v1/turnkey/giftcard/purchase")
     .method("POST")
     .handler(async evt => {
         // TODO remove this hack and use proper routing
-        if (evt.queryStringParameters["hack"] === "resendGiftcard") {
-            return await resendGiftcard(evt);
-        }
+        // if (evt.queryStringParameters["hack"] === "resendGiftcard") {
+        //     return await resendGiftcard(evt);
+        // }
 
         console.log("Received request:" + JSON.stringify(evt));
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
@@ -142,10 +142,11 @@ router.route("/v1/turnkey/purchaseGiftcard")
     });
 
 // TODO this needs to be wired up in CloudFront before it will work
-// router.route("/v1/turnkey/resendGiftcard")
-//     .method("POST")
-//     .handler(async evt => {
-async function resendGiftcard(evt: RouterEvent): Promise<RouterResponse> {
+// async function resendGiftcard(evt: RouterEvent): Promise<RouterResponse> {
+router.route("/v1/turnkey/giftcard/resend")
+    .method("POST")
+    .handler(async evt => {
+    console.log("resend gift card called!");
     console.log("Received request:" + JSON.stringify(evt));
     const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
     metrics.histogram("turnkey.giftcardresend", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
@@ -193,7 +194,7 @@ async function resendGiftcard(evt: RouterEvent): Promise<RouterResponse> {
             success: true
         }
     };
-}
+});
 
 async function createCard(userSuppliedId: string, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig, metadata?: any): Promise<Card> {
     const cardParams: CreateCardParams = {
