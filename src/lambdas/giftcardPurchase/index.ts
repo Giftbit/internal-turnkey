@@ -46,100 +46,110 @@ const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVa
 const assumeGiftcardPurchaseToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN");
 const minfraudConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<MinfraudConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_MINFRAUD");
 router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`, assumeGetSharedSecretToken));
+
+/**
+ * Deprecated. Requests should be using /turnkey/giftcard/purchase
+ */
+router.route("/v1/turnkey/purchaseGiftcard")
+    .method("POST")
+    .handler(async evt => {
+        return await purchaseGiftcard(evt);
+    });
+
+
 router.route("/v1/turnkey/giftcard/purchase")
     .method("POST")
     .handler(async evt => {
-        // TODO remove this hack and use proper routing
-        // if (evt.queryStringParameters["hack"] === "resendGiftcard") {
-        //     return await resendGiftcard(evt);
-        // }
-
-        console.log("Received request:" + JSON.stringify(evt));
-        const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
-        metrics.histogram("turnkey.giftcardpurchase", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
-        metrics.flush();
-        auth.requireIds("giftbitUserId");
-        auth.requireScopes("lightrailV1:purchaseGiftcard");
-
-        const authorizeAs: string = evt.meta["auth-token"].split(".")[1];
-        const assumeToken = (await assumeGiftcardPurchaseToken).assumeToken;
-
-        lightrail.configure({
-            apiKey: assumeToken,
-            restRoot: "https://" + process.env["LIGHTRAIL_DOMAIN"] + "/v1/",
-            logRequests: true,
-            additionalHeaders: {AuthorizeAs: authorizeAs}
-        });
-
-        const {config, merchantStripeConfig, lightrailStripeConfig} = await validateConfig(auth, assumeToken, authorizeAs);
-        const params = validateGiftcardPurchaseParams(evt);
-        const chargeAndCardCoreMetadata = {
-            sender_name: params.senderName,
-            sender_email: params.senderEmail,
-            recipient_email: params.recipientEmail,
-            message: params.message
-        };
-
-        let charge: Charge = await createCharge({
-            amount: params.initialValue,
-            currency: config.currency,
-            source: params.stripeCardToken,
-            receipt_email: params.senderEmail,
-            metadata: chargeAndCardCoreMetadata
-        }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
-
-        let card: Card;
-
-        await doFraudCheck(lightrailStripeConfig, merchantStripeConfig, params, charge, evt, auth);
-
-        try {
-            const cardMetadata = {
-                ...chargeAndCardCoreMetadata,
-                charge_id: charge.id,
-                "giftbit-note": {note: `charge_id: ${charge.id}, sender: ${params.senderEmail}, recipient: ${params.recipientEmail}`}
-            };
-            card = await createCard(charge.id, params, config, cardMetadata);
-        } catch (err) {
-            console.log(`An error occurred during card creation. Error: ${JSON.stringify(err)}.`);
-            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, "Refunded due to an unexpected error during gift card creation in Lightrail.");
-
-            if (err.status === 400) {
-                throw new RestError(httpStatusCode.clientError.BAD_REQUEST, err.body.message);
-            } else {
-                throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR);
-            }
-        }
-
-        try {
-            await updateCharge(charge.id, {
-                description: `${config.companyName} gift card. Purchase reference number: ${card.cardId}.`,
-                metadata: {...chargeAndCardCoreMetadata, lightrail_gift_card_id: card.cardId}
-            }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
-            await emailGiftToRecipient({
-                cardId: card.cardId,
-                recipientEmail: params.recipientEmail,
-                message: params.message,
-                senderName: params.senderName,
-                initialValue: params.initialValue
-            }, config);
-            await emailReceiptToSender({
-                recipientEmail: params.recipientEmail,
-                senderName: params.senderName,
-                senderEmail: params.senderEmail,
-                token: await generateCardToken(auth, card)
-            }, config);
-        } catch (err) {
-            console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
-            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, `Refunded due to an unexpected error during the gift card delivery step. The gift card ${card.cardId} will be cancelled in Lightrail.`);
-            throw new GiftbitRestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR);
-        }
-
-        return {
-            body: {
-                cardId: card.cardId
-            }
-        };
+        return await purchaseGiftcard(evt);
     });
+
+async function purchaseGiftcard(evt: RouterEvent): Promise<RouterResponse> {
+    console.log("Received request:" + JSON.stringify(evt));
+    const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
+    metrics.histogram("turnkey.giftcardpurchase", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
+    metrics.flush();
+    auth.requireIds("giftbitUserId");
+    auth.requireScopes("lightrailV1:purchaseGiftcard");
+
+    const authorizeAs: string = evt.meta["auth-token"].split(".")[1];
+    const assumeToken = (await assumeGiftcardPurchaseToken).assumeToken;
+
+    lightrail.configure({
+        apiKey: assumeToken,
+        restRoot: "https://" + process.env["LIGHTRAIL_DOMAIN"] + "/v1/",
+        logRequests: true,
+        additionalHeaders: {AuthorizeAs: authorizeAs}
+    });
+
+    const {config, merchantStripeConfig, lightrailStripeConfig} = await validateConfig(auth, assumeToken, authorizeAs);
+    const params = validateGiftcardPurchaseParams(evt);
+    const chargeAndCardCoreMetadata = {
+        sender_name: params.senderName,
+        sender_email: params.senderEmail,
+        recipient_email: params.recipientEmail,
+        message: params.message
+    };
+
+    let charge: Charge = await createCharge({
+        amount: params.initialValue,
+        currency: config.currency,
+        source: params.stripeCardToken,
+        receipt_email: params.senderEmail,
+        metadata: chargeAndCardCoreMetadata
+    }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
+
+    let card: Card;
+
+    await doFraudCheck(lightrailStripeConfig, merchantStripeConfig, params, charge, evt, auth);
+
+    try {
+        const cardMetadata = {
+            ...chargeAndCardCoreMetadata,
+            charge_id: charge.id,
+            "giftbit-note": {note: `charge_id: ${charge.id}, sender: ${params.senderEmail}, recipient: ${params.recipientEmail}`}
+        };
+        card = await createCard(charge.id, params, config, cardMetadata);
+    } catch (err) {
+        console.log(`An error occurred during card creation. Error: ${JSON.stringify(err)}.`);
+        await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, "Refunded due to an unexpected error during gift card creation in Lightrail.");
+
+        if (err.status === 400) {
+            throw new RestError(httpStatusCode.clientError.BAD_REQUEST, err.body.message);
+        } else {
+            throw new RestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    try {
+        await updateCharge(charge.id, {
+            description: `${config.companyName} gift card. Purchase reference number: ${card.cardId}.`,
+            metadata: {...chargeAndCardCoreMetadata, lightrail_gift_card_id: card.cardId}
+        }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
+        await emailGiftToRecipient({
+            cardId: card.cardId,
+            recipientEmail: params.recipientEmail,
+            message: params.message,
+            senderName: params.senderName,
+            initialValue: params.initialValue
+        }, config);
+        await emailReceiptToSender({
+            recipientEmail: params.recipientEmail,
+            senderName: params.senderName,
+            senderEmail: params.senderEmail,
+            token: await generateCardToken(auth, card)
+        }, config);
+    } catch (err) {
+        console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
+        await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, `Refunded due to an unexpected error during the gift card delivery step. The gift card ${card.cardId} will be cancelled in Lightrail.`);
+        throw new GiftbitRestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR);
+    }
+
+    return {
+        body: {
+            cardId: card.cardId
+        }
+    };
+}
 
 // TODO this needs to be wired up in CloudFront before it will work
 // async function resendGiftcard(evt: RouterEvent): Promise<RouterResponse> {
