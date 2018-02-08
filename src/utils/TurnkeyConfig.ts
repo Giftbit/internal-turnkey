@@ -3,7 +3,6 @@ import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 
 export interface TurnkeyPublicConfig {
     additionalInfo: string;
-    checkCardLink?: string; // optional
     claimLink: string;
     companyName: string;
     companyWebsiteUrl: string;
@@ -33,10 +32,6 @@ export function validateTurnkeyConfig(config: TurnkeyPublicConfig): void {
     if (!config) {
         console.log("turnkey config cannot be null");
         throw new GiftbitRestError(424, "Config was not set.", "MissingConfig");
-    }
-    if (config.checkCardLink && !config.checkCardLink.includes(CHECK_CARD_AUTH_REPLACEMENT_STRING)) {
-        console.log(`turnkey config checkStatusLink must contain ${CHECK_CARD_AUTH_REPLACEMENT_STRING} for replacement.`);
-        throw new GiftbitRestError(424, `Config claimLink must be set and contain ${CHECK_CARD_AUTH_REPLACEMENT_STRING} for replacement.`, "InvalidCheckCardLink");
     }
     if (!config.claimLink || !config.claimLink.includes(FULLCODE_REPLACMENT_STRING)) {
         console.log(`turnkey config claimLink must contain ${FULLCODE_REPLACMENT_STRING} for replacement.`);

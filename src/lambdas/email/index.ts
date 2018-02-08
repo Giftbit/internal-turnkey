@@ -2,12 +2,13 @@ import "babel-polyfill";
 import * as cassava from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as metrics from "giftbit-lambda-metricslib";
-import {errorNotificationWrapper, sendErrorNotificaiton} from "giftbit-cassava-routes/dist/sentry";
+import {errorNotificationWrapper} from "giftbit-cassava-routes/dist/sentry";
 import {sendEmail} from "../../utils/emailUtils";
 import {setParamsFromRequest} from "./EmailParameters";
-import {httpStatusCode, RestError} from "cassava";
-const dropinTemplate = require("./templates/dropInDeveloperOnboardEmail.html"); // import * from "./templates/dropInDeveloperOnboardEmail.html"
-const testTemplate = require("./templates/testEmail.html"); // import * from "./templates/dropInDeveloperOnboardEmail.html"
+import {httpStatusCode} from "cassava";
+import {EmailTemplate} from "./EmailTemplate";
+import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
+const dropinTemplate = require("./templates/dropInDeveloperOnboardEmail.html");
 const fs = require("fs");
 
 export const router = new cassava.Router();
@@ -19,39 +20,41 @@ const roleDefinitionsPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<an
 const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN");
 router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`, assumeGetSharedSecretToken));
 
-const emailTypes = {
-  dropIn: dropinTemplate,
-  test: testTemplate
+const EMAIL_TEMPLATES: {[key: string]: EmailTemplate} = {
+  dropInDeveloperOnboarding: {
+      content: dropinTemplate,
+      subject: "Getting started with Lightrail's Drop-in Gift Cards",
+  }
 };
-/**
- * Deprecated. Requests should be using /turnkey/giftcard/purchase
- */
+
 router.route("/v1/turnkey/email")
     .method("POST")
     .handler(async evt => {
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
-        metrics.histogram("turnkey.giftcardpurchase", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
+        metrics.histogram("turnkey.email", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
         metrics.flush();
         auth.requireIds("giftbitUserId");
-        // auth.requireScopes("lightrailV1:purchaseGiftcard");
 
-        console.log("DROP-IN TEMPLATE " + dropinTemplate);
-        console.log(fs.readFileSync(dropinTemplate).toString("utf-8"));
-        const params = setParamsFromRequest(evt);
-        const emailTemplate = emailTypes[params.type];
-        if (!emailTemplate) {
-            throw new RestError(httpStatusCode.clientError.BAD_REQUEST, `Invalid type, must belong to ${emailTypes}`);
+        const params = setParamsFromRequest(evt, EMAIL_TEMPLATES);
+        console.log(`Send email requested. Params ${JSON.stringify(params)}.`);
+
+        if (params.emailTemplate.requiredScope) {
+            auth.requireScopes(params.emailTemplate.requiredScope);
         }
+        let emailContent = fs.readFileSync(params.emailTemplate.content).toString("utf-8");
+        emailContent = doEmailReplacement(emailContent, params.replacements);
 
-
-
-
-        const sendEmailResponse = await sendEmail({
-            toAddress: params.recipientEmail,
-            subject: "This is a subject and needs to be updated badly",
-            body: emailTemplate,
-            replyToAddress: "notifications@lightrail.com" //todo - fix,
-        });
+        try {
+            await sendEmail({
+                toAddress: params.recipientEmail,
+                subject: params.emailTemplate.subject,
+                body: emailContent,
+                replyToAddress: "notifications@lightrail.com" //todo - fix,
+            });
+        } catch (err) {
+            console.log(`An error occurred while attempting to send email. Params: Error: ${err}.`);
+            throw new GiftbitRestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR);
+        }
 
         return {
             body: {
@@ -59,52 +62,7 @@ router.route("/v1/turnkey/email")
             }
         };
     });
-//
-// async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: TurnkeyPublicConfig): Promise<SendEmailResponse> {
-//     const fullcode: string = (await lightrail.cards.getFullcode(params.cardId)).code;
-//     console.log(`retrieved fullcode lastFour ${fullcode.substring(fullcode.length - 4)}`);
-//     const claimLink = turnkeyConfig.claimLink.replace(FULLCODE_REPLACMENT_STRING, fullcode);
-//     const from = params.senderName ? `From ${params.senderName}` : "";
-//     const emailSubject = turnkeyConfig.emailSubject ? turnkeyConfig.emailSubject : `You have received a gift card for ${turnkeyConfig.companyName}`;
-//     params.message = params.message ? params.message : "Hi there, please enjoy this gift.";
-//
-//     let emailTemplate = RECIPIENT_EMAIL;
-//     const templateReplacements = [
-//         {key: "fullcode", value: fullcode},
-//         {key: "claimLink", value: claimLink},
-//         {key: "senderFrom", value: from},
-//         {key: "emailSubject", value: emailSubject},
-//         {key: "message", value: params.message},
-//         {key: "initialValue", value: formatCurrency(params.initialValue, turnkeyConfig.currency)},
-//         {key: "additionalInfo", value: turnkeyConfig.additionalInfo || " "},
-//         {key: "claimLink", value: turnkeyConfig.claimLink},
-//         {key: "companyName", value: turnkeyConfig.companyName},
-//         {key: "companyWebsiteUrl", value: turnkeyConfig.companyWebsiteUrl},
-//         {key: "copyright", value: turnkeyConfig.copyright},
-//         {key: "copyrightYear", value: new Date().getUTCFullYear().toString()},
-//         {key: "customerSupportEmail", value: turnkeyConfig.customerSupportEmail},
-//         {key: "linkToPrivacy", value: turnkeyConfig.linkToPrivacy},
-//         {key: "linkToTerms", value: turnkeyConfig.linkToTerms},
-//         {key: "logo", value: turnkeyConfig.logo},
-//         {key: "termsAndConditions", value: turnkeyConfig.termsAndConditions},
-//     ];
-//
-//     for (const replacement of templateReplacements) {
-//         const regexp = new RegExp(`__${replacement.key}__`, "g");
-//         emailTemplate = emailTemplate.replace(regexp, replacement.value);
-//     }
-//
-//     const sendEmailResponse = await sendEmail({
-//         toAddress: params.recipientEmail,
-//         subject: emailSubject,
-//         body: emailTemplate,
-//         replyToAddress: turnkeyConfig.giftEmailReplyToAddress,
-//     });
-//     console.log(`Email sent. MessageId: ${sendEmailResponse.MessageId}.`);
-//     return sendEmailResponse;
-// }
 
-//noinspection JSUnusedGlobalSymbols
 export const handler = errorNotificationWrapper(
     process.env["SECURE_CONFIG_BUCKET"],        // the S3 bucket with the Sentry API key
     process.env["SECURE_CONFIG_KEY_SENTRY"],   // the S3 object key for the Sentry API key
@@ -114,3 +72,21 @@ export const handler = errorNotificationWrapper(
         process.env["SECURE_CONFIG_KEY_DATADOG"],   // the S3 object key for the DataDog API key
         router.getLambdaHandler()                   // the cassava handler
     ));
+
+function doEmailReplacement(emailContent: string, replacements: Object) {
+    for (const key of Object.keys(replacements)) {
+        const pattern = new RegExp(`{REPLACEMENT:${key}}`, "g");
+        if (emailContent.search(pattern) == -1) {
+            console.log(`User provided a replacement key ${key} that was not found in the email content.`);
+            throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter replacement.${key} is not a replacement key that needs to be replaced in this email.`, "InvalidParamUnknownReplacementKey");
+        }
+        emailContent = emailContent.replace(pattern, replacements[key]);
+    }
+    const regex = /{REPLACEMENT:(.*?)}/g;
+    const match = regex.exec(emailContent);
+    if (match) {
+        console.log(`Found un-replaced string ${match[0]} in email content. Returning 400.`);
+        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `email has un-replaced value ${match[1]}`, "MissedParameterReplacement");
+    }
+    return emailContent
+}

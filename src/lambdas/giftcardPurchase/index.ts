@@ -5,13 +5,13 @@ import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as lightrail from "lightrail-client";
 import * as lambdaComsLib from "giftbit-lambda-comslib";
 import * as uuid from "uuid";
-import {Card} from "lightrail-client/dist/model";
+import {Card, Contact} from "lightrail-client/dist/model";
 import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
 import * as giftcardPurchaseParams from "./GiftcardPurchaseParams";
 import {GiftcardPurchaseParams} from "./GiftcardPurchaseParams";
 import {RECIPIENT_EMAIL} from "./RecipientEmail";
 import {
-    CHECK_CARD_AUTH_REPLACEMENT_STRING, FULLCODE_REPLACMENT_STRING, TurnkeyPublicConfig,
+    FULLCODE_REPLACMENT_STRING, TurnkeyPublicConfig,
     validateTurnkeyConfig
 } from "../../utils/TurnkeyConfig";
 import * as kvsAccess from "../../utils/kvsAccess";
@@ -22,7 +22,7 @@ import * as metrics from "giftbit-lambda-metricslib";
 import {errorNotificationWrapper, sendErrorNotificaiton} from "giftbit-cassava-routes/dist/sentry";
 import {SendEmailResponse} from "aws-sdk/clients/ses";
 import {sendEmail} from "../../utils/emailUtils";
-import {CreateCardParams} from "lightrail-client/dist/params";
+import {CreateCardParams, CreateContactParams} from "lightrail-client/dist/params";
 import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 import {Charge} from "../../utils/stripedtos/Charge";
 import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
@@ -34,7 +34,8 @@ import {getScore} from "../../utils/minfraud/minfraudUtils";
 import {AuthorizationBadge} from "giftbit-cassava-routes/dist/jwtauth";
 import {MinfraudScoreParams} from "../../utils/minfraud/MinfraudScoreParams";
 import {MinfraudScoreResult} from "../../utils/minfraud/MinfraudScoreResult";
-import {EmailReceiptParams} from "./EmailReceiptParams";
+import {setParamsFromRequest} from "./ResendGiftCardParams";
+
 
 export const router = new cassava.Router();
 
@@ -72,6 +73,7 @@ async function purchaseGiftcard(evt: RouterEvent): Promise<RouterResponse> {
     auth.requireScopes("lightrailV1:purchaseGiftcard");
 
     const authorizeAs: string = evt.meta["auth-token"].split(".")[1];
+    console.log("AuthorizeAs: " + authorizeAs);
     const assumeToken = (await assumeGiftcardPurchaseToken).assumeToken;
 
     lightrail.configure({
@@ -132,12 +134,6 @@ async function purchaseGiftcard(evt: RouterEvent): Promise<RouterResponse> {
             senderName: params.senderName,
             initialValue: params.initialValue
         }, config);
-        await emailReceiptToSender({
-            recipientEmail: params.recipientEmail,
-            senderName: params.senderName,
-            senderEmail: params.senderEmail,
-            token: await generateCardToken(auth, card)
-        }, config);
     } catch (err) {
         console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
         await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, `Refunded due to an unexpected error during the gift card delivery step. The gift card ${card.cardId} will be cancelled in Lightrail.`);
@@ -152,20 +148,20 @@ async function purchaseGiftcard(evt: RouterEvent): Promise<RouterResponse> {
 }
 
 // TODO this needs to be wired up in CloudFront before it will work
-// async function resendGiftcard(evt: RouterEvent): Promise<RouterResponse> {
 router.route("/v1/turnkey/giftcard/resend")
     .method("POST")
-    .handler(async evt => {
+    .handler(async request => {
     console.log("resend gift card called!");
-    console.log("Received request:" + JSON.stringify(evt));
-    const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
+    console.log("Received request:" + JSON.stringify(request));
+    const auth: giftbitRoutes.jwtauth.AuthorizationBadge = request.meta["auth"];
     metrics.histogram("turnkey.giftcardresend", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
     metrics.flush();
-    auth.requireIds("giftbitUserId", "cardId");
-    auth.requireScopes("lightrailV1:card:resend");
+    auth.requireIds("giftbitUserId"); // "cardId" if eventually allowing a sender to resend the gift card.
+    auth.requireScopes("lightrailV1:giftcard:resend");
 
-    const authorizeAs: string = evt.meta["auth-token"].split(".")[1];
+    const authorizeAs: string = request.meta["auth-token"].split(".")[1];
     const assumeToken = (await assumeGiftcardPurchaseToken).assumeToken;
+    const params = setParamsFromRequest(request);
 
     lightrail.configure({
         apiKey: assumeToken,
@@ -178,19 +174,31 @@ router.route("/v1/turnkey/giftcard/resend")
     console.log(`Fetched public turnkey config: ${JSON.stringify(config)}`);
     validateTurnkeyConfig(config);
 
-    const cardId = auth.cardId;
-    console.log("cardId=", cardId);
-
     // TODO: confirm this is a legit transaction
-    const transactionsResp = await lightrail.cards.transactions.getTransactions(cardId, {transactionType: "INITIAL_VALUE"});
+    const transactionsResp = await lightrail.cards.transactions.getTransactions(params.cardId, {transactionType: "INITIAL_VALUE"});
     const transaction = transactionsResp.transactions[0];
     console.log("transaction=", transaction);
 
+    const card = await lightrail.cards.getCardById(params.cardId);
+    let contact: Contact;
+    if (card.contactId){
+        console.log(`Card had a contactId ${card.contactId}. Will now lookup contact.`);
+        contact = await lightrail.contacts.getContactById(card.contactId);
+        if (contact.email != params.email) {
+            console.log(`Found contact but email didn't match requested email address to deliver the gift card to. Will now update the email to ${params.email} for contact: ${JSON.stringify(contact)}.`)
+            await lightrail.contacts.updateContact(contact, {email: params.email})
+        }
+    } else {
+        console.log(`Card did not have a contactId. Will now lookup or create a contact for email ${params.email}.`);
+        contact = await getOrCreateContact(params.email);
+        await lightrail.cards.updateCard(card, {contactId: contact.contactId});
+    }
+
     try {
         await emailGiftToRecipient({
-            cardId: cardId,
-            recipientEmail: transaction.metadata.recipient_email,
-            message: transaction.metadata.message,
+            cardId: params.cardId,
+            recipientEmail: params.email,
+            message: params.message ? params.message : transaction.metadata.message,
             senderName: transaction.metadata.sender_name,
             initialValue: transaction.value
         }, config);
@@ -206,10 +214,30 @@ router.route("/v1/turnkey/giftcard/resend")
     };
 });
 
+async function getOrCreateContact(email: string): Promise<Contact> {
+    const contacts = await lightrail.contacts.getContacts({email: email});
+    if (contacts.contacts.length > 0) {
+        console.log(`Found existing contact ${JSON.stringify(contacts.contacts[0])} to set `);
+        return contacts.contacts[0]
+    } else {
+        const contactParams: CreateContactParams = {
+            userSuppliedId: uuid.v4().replace(/-/g, ""),
+            email: email
+        };
+        console.log(`Creating contact with params ${JSON.stringify(contactParams)}`);
+        return await lightrail.contacts.createContact(contactParams);
+    }
+}
+
 async function createCard(userSuppliedId: string, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig, metadata?: any): Promise<Card> {
+
+    const contact = await getOrCreateContact(params.recipientEmail);
+    console.log(`Got contact ${JSON.stringify(contact)}`);
+
     const cardParams: CreateCardParams = {
         userSuppliedId: userSuppliedId,
         cardType: Card.CardType.GIFT_CARD,
+        contactId: contact.contactId,
         initialValue: params.initialValue,
         programId: config.programId,
         metadata: metadata
@@ -218,26 +246,6 @@ async function createCard(userSuppliedId: string, params: GiftcardPurchaseParams
     const card: Card = await lightrail.cards.createCard(cardParams);
     console.log(`Created card ${JSON.stringify(card)}.`);
     return card;
-}
-
-async function generateCardToken(auth: giftbitRoutes.jwtauth.AuthorizationBadge, card: Card): Promise<string> {
-    const authConfig = await authConfigPromise;
-    const cardBadge = new giftbitRoutes.jwtauth.AuthorizationBadge({
-        g: {
-            gui: auth.giftbitUserId,
-            gmi: auth.merchantId,
-            gci: card.cardId
-        },
-        jti: `cardbadge-${uuid.v4().replace(/-/g, "")}`,
-        parentJti: auth.uniqueIdentifier,
-        scopes: [
-            "lightrailV1:card:show",
-            "lightrailV1:card:details",
-            "lightrailV1:card:resend"
-        ]
-    });
-    cardBadge.issuedAtTime = new Date();
-    return cardBadge.sign(authConfig.secretkey);
 }
 
 function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeModeConfig) {
@@ -291,24 +299,6 @@ async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: 
         replyToAddress: turnkeyConfig.giftEmailReplyToAddress,
     });
     console.log(`Email sent. MessageId: ${sendEmailResponse.MessageId}.`);
-    return sendEmailResponse;
-}
-
-async function emailReceiptToSender(params: EmailReceiptParams, turnkeyConfig: TurnkeyPublicConfig): Promise<SendEmailResponse> {
-    if (!turnkeyConfig.checkCardLink) {
-        return null;
-    }
-
-    const checkCardLink = turnkeyConfig.checkCardLink.replace(CHECK_CARD_AUTH_REPLACEMENT_STRING, params.token);
-    const subject = `${turnkeyConfig.companyName} gift card receipt`;
-    const body = `You sent a gift card to ${params.recipientEmail}.  Check on the status of the gift card (and resend if Jeff gets to it) at ${checkCardLink}`;
-
-    const sendEmailResponse = await sendEmail({
-        toAddress: params.recipientEmail,
-        subject,
-        body,
-        replyToAddress: turnkeyConfig.giftEmailReplyToAddress,
-    });
     return sendEmailResponse;
 }
 
