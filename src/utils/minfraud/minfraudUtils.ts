@@ -26,6 +26,6 @@ export async function getScore(minfraudScoreParams: MinfraudScoreParams, minfrau
         return {
             riskScore: 0.1,
             ipRiskScore: 0.1
-        }
+        };
     }
 }

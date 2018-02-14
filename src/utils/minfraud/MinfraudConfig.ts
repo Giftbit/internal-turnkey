@@ -1,5 +1,5 @@
 export interface MinfraudConfig {
-    userId: string
-    licenseKey: string
-    doMinfraudCheck: boolean
+    userId: string;
+    licenseKey: string;
+    doMinfraudCheck: boolean;
 }
