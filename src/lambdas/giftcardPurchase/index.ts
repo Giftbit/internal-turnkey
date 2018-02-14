@@ -45,6 +45,7 @@ const authConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbit
 const roleDefinitionsPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS");
 const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN");
 const assumeGiftcardPurchaseToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN");
+const assumeGiftcardResendToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_RESEND_TOKEN");
 const minfraudConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<MinfraudConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_MINFRAUD");
 router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`, assumeGetSharedSecretToken));
 
@@ -180,6 +181,11 @@ router.route("/v1/turnkey/giftcard/resend")
     console.log("transaction=", transaction);
 
     const card = await lightrail.cards.getCardById(params.cardId);
+    if (card.cardType != "GIFT_CARD") {
+        console.log(`Gift card resend endpoint called with a card that is not of type GIFT_CARD. card: ${JSON.stringify(card)}.`);
+        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter cardId must be for a GIFT_CARD`, "InvalidParamCardId");
+    }
+
     let contact: Contact;
     if (card.contactId){
         console.log(`Card had a contactId ${card.contactId}. Will now lookup contact.`);
@@ -198,8 +204,8 @@ router.route("/v1/turnkey/giftcard/resend")
         await emailGiftToRecipient({
             cardId: params.cardId,
             recipientEmail: params.email,
-            message: params.message ? params.message : transaction.metadata.message,
-            senderName: transaction.metadata.sender_name,
+            message: transaction.metadata ? transaction.metadata.message ? transaction.metadata.message : params.message : params.message,
+            senderName: transaction.metadata ? transaction.metadata.sender_name ? transaction.metadata.sender_name : params.senderName : params.senderName,
             initialValue: transaction.value
         }, config);
     } catch (err) {

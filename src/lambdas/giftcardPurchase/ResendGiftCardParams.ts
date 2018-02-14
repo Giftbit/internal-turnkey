@@ -6,10 +6,12 @@ export interface ResendGiftCardParams {
     cardId: string
     email: string
     message?: string
+    senderName?: string
 }
 
 export function setParamsFromRequest(request: RouterEvent): ResendGiftCardParams {
-    if (!request.body.cardId) {
+    const cardId = request.body.cardId;
+    if (!cardId) {
         console.log(`parameter type failed validation. received ${request.body.cardId}`);
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter cardId must be set`, "InvalidParamCardId");
     }
@@ -20,9 +22,16 @@ export function setParamsFromRequest(request: RouterEvent): ResendGiftCardParams
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter recipientEmail must be a valid email address", "InvalidParamRecipientEmail");
     }
 
+    // const message = request.body.message;
+    // if (!message) {
+    //     console.log(`parameter message failed validation. received ${message}`);
+    //     throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter message must be set", "InvalidParamMessage");
+    // }
+
     return {
-        cardId: request.body.cardType,
+        cardId: cardId,
         email: email,
         message: request.body.message,
+        senderName: request.body.senderName,
     }
 }

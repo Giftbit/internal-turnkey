@@ -30,6 +30,10 @@ Parameters:
   SecureConfigKeyAssumeGiftcardPurchaseToken:
     Type: String
     Description: Name of the Assume Auth token in S3 that can has the scopes required for the giftcard purchase lambda
+  SecureConfigKeyAssumeGiftcardResendToken:
+    Type: String
+    Description: Name of the Assume Auth token in S3 that can has the scopes required for the giftcard purchase lambda
+    Default: "assumeGiftcardResendToken.json"
   SecureConfigKeyAssumeStorageScopeToken:
     Type: String
     Description: Name of the Assume Auth token in S3 that can be used to access merchant secret key in KVS
@@ -100,6 +104,7 @@ Resources:
           SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
           SECURE_CONFIG_KEY_ROLE_DEFINITIONS: !Ref SecureConfigKeyRoleDefinitions
           SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN: !Ref SecureConfigKeyAssumeGiftcardPurchaseToken
+          SECURE_CONFIG_KEY_ASSUME_GIFTCARD_RESEND_TOKEN: !Ref SecureConfigKeyAssumeGiftcardResendToken
           SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN: !Ref SecureConfigKeyAssumeStorageScopeToken
           SECURE_CONFIG_KEY_SENTRY: !Ref SecureConfigKeySentry
           SECURE_CONFIG_KEY_STRIPE: !Ref SecureConfigKeyStripe
@@ -113,6 +118,7 @@ Resources:
                 - s3:GetObject
               Resource:
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeGiftcardPurchaseToken}"
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeGiftcardResendToken}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeStorageScopeToken}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyDataDog}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeySentry}"
@@ -174,7 +180,6 @@ Resources:
           SECURE_CONFIG_KEY_DATADOG: !Ref SecureConfigKeyDataDog
           SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
           SECURE_CONFIG_KEY_ROLE_DEFINITIONS: !Ref SecureConfigKeyRoleDefinitions
-          SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN: !Ref SecureConfigKeyAssumeGiftcardPurchaseToken
           SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN: !Ref SecureConfigKeyAssumeStorageScopeToken
           SECURE_CONFIG_KEY_SENTRY: !Ref SecureConfigKeySentry
           SECURE_CONFIG_KEY_STRIPE: !Ref SecureConfigKeyStripe
@@ -187,7 +192,6 @@ Resources:
               Action:
                 - s3:GetObject
               Resource:
-                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeGiftcardPurchaseToken}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeStorageScopeToken}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyDataDog}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeySentry}"

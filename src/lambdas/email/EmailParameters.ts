@@ -31,7 +31,7 @@ export function setParamsFromRequest(request: RouterEvent, EMAIL_TEMPLATES: {[st
 
     return {
         emailTemplate: emailTemplate,
-        recipientEmail: request.body.recipientEmail,
+        recipientEmail: recipientEmail,
         replacements: replacements,
     }
 }
