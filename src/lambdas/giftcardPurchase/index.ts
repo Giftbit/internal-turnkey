@@ -34,7 +34,7 @@ import {getScore} from "../../utils/minfraud/minfraudUtils";
 import {AuthorizationBadge} from "giftbit-cassava-routes/dist/jwtauth";
 import {MinfraudScoreParams} from "../../utils/minfraud/MinfraudScoreParams";
 import {MinfraudScoreResult} from "../../utils/minfraud/MinfraudScoreResult";
-import {setParamsFromRequest} from "./ResendGiftCardParams";
+import {ResendGiftCardParams, setParamsFromRequest} from "./ResendGiftCardParams";
 
 
 export const router = new cassava.Router();
@@ -152,8 +152,7 @@ async function purchaseGiftcard(evt: RouterEvent): Promise<RouterResponse> {
 router.route("/v1/turnkey/giftcard/resend")
     .method("POST")
     .handler(async request => {
-    console.log("resend gift card called!");
-    console.log("Received request:" + JSON.stringify(request));
+    console.log("Received request for resend gift card:" + JSON.stringify(request));
     const auth: giftbitRoutes.jwtauth.AuthorizationBadge = request.meta["auth"];
     metrics.histogram("turnkey.giftcardresend", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
     metrics.flush();
@@ -161,7 +160,7 @@ router.route("/v1/turnkey/giftcard/resend")
     auth.requireScopes("lightrailV1:giftcard:resend");
 
     const authorizeAs: string = request.meta["auth-token"].split(".")[1];
-    const assumeToken = (await assumeGiftcardPurchaseToken).assumeToken;
+    const assumeToken = (await assumeGiftcardResendToken).assumeToken;
     const params = setParamsFromRequest(request);
 
     lightrail.configure({
@@ -175,10 +174,9 @@ router.route("/v1/turnkey/giftcard/resend")
     console.log(`Fetched public turnkey config: ${JSON.stringify(config)}`);
     validateTurnkeyConfig(config);
 
-    // TODO: confirm this is a legit transaction
     const transactionsResp = await lightrail.cards.transactions.getTransactions(params.cardId, {transactionType: "INITIAL_VALUE"});
     const transaction = transactionsResp.transactions[0];
-    console.log("transaction=", transaction);
+    console.log("Retrieved transaction:", transaction);
 
     const card = await lightrail.cards.getCardById(params.cardId);
     if (card.cardType != "GIFT_CARD") {
@@ -186,26 +184,27 @@ router.route("/v1/turnkey/giftcard/resend")
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter cardId must be for a GIFT_CARD`, "InvalidParamCardId");
     }
 
-    let contact: Contact;
-    if (card.contactId){
-        console.log(`Card had a contactId ${card.contactId}. Will now lookup contact.`);
-        contact = await lightrail.contacts.getContactById(card.contactId);
-        if (contact.email != params.email) {
-            console.log(`Found contact but email didn't match requested email address to deliver the gift card to. Will now update the email to ${params.email} for contact: ${JSON.stringify(contact)}.`)
-            await lightrail.contacts.updateContact(contact, {email: params.email})
+    await updateContactWithResendInfo(card, params);
+
+    if (!params.message) {
+        params.message = transaction.metadata ? transaction.metadata.message : null;
+        if (!params.message) {
+            throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter message either be provided or part of the cards's metadata`, "InvalidParamMessage");
         }
-    } else {
-        console.log(`Card did not have a contactId. Will now lookup or create a contact for email ${params.email}.`);
-        contact = await getOrCreateContact(params.email);
-        await lightrail.cards.updateCard(card, {contactId: contact.contactId});
+    }
+    if (!params.senderName) {
+        params.senderName = transaction.metadata ? transaction.metadata.senderName : null;
+        if (!params.senderName) {
+            throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter senderName either be provided or part of the cards's metadata`, "InvalidParamSenderName");
+        }
     }
 
     try {
         await emailGiftToRecipient({
             cardId: params.cardId,
             recipientEmail: params.email,
-            message: transaction.metadata ? transaction.metadata.message ? transaction.metadata.message : params.message : params.message,
-            senderName: transaction.metadata ? transaction.metadata.sender_name ? transaction.metadata.sender_name : params.senderName : params.senderName,
+            message: params.message,
+            senderName: params.senderName,
             initialValue: transaction.value
         }, config);
     } catch (err) {
@@ -219,6 +218,21 @@ router.route("/v1/turnkey/giftcard/resend")
         }
     };
 });
+
+async function updateContactWithResendInfo(card: Card, params: ResendGiftCardParams) {
+    if (card.contactId) {
+        console.log(`Card had a contactId ${card.contactId}. Will now lookup contact.`);
+        const contact = await lightrail.contacts.getContactById(card.contactId);
+        if (contact.email != params.email) {
+            console.log(`Found contact but email didn't match requested email address to deliver the gift card to. Will now update the email to ${params.email} for contact: ${JSON.stringify(contact)}.`)
+            await lightrail.contacts.updateContact(contact, {email: params.email})
+        }
+    } else {
+        console.log(`Card did not have a contactId. Will now lookup or create a contact for email ${params.email}.`);
+        const contact = await getOrCreateContact(params.email);
+        await lightrail.cards.updateCard(card, {contactId: contact.contactId});
+    }
+}
 
 async function getOrCreateContact(email: string): Promise<Contact> {
     const contacts = await lightrail.contacts.getContacts({email: email});
