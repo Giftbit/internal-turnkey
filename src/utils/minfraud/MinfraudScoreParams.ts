@@ -1,41 +1,41 @@
 export interface MinfraudScoreParams {
-    device: Device
-    event: Event
-    account: Account
-    email: Email
-    billing: Billing
-    payment: Payment
-    credit_card: CreditCard
-    order: Order
+    device: Device;
+    event: Event;
+    account: Account;
+    email: Email;
+    billing: Billing;
+    payment: Payment;
+    credit_card: CreditCard;
+    order: Order;
 }
 
 interface Device {
-    ip_address: string
+    ip_address: string;
 }
 
 interface Event {
-    type: string
-    transaction_id: string
+    type: string;
+    transaction_id: string;
 }
 
 interface Account {
-    user_id: string
+    user_id: string;
 }
 
 interface Email {
-    address: string
-    domain: string
+    address: string;
+    domain: string;
 }
 
 interface Billing {
-    first_name: string
-    last_name: string
-    postal: string
+    first_name: string;
+    last_name: string;
+    postal: string;
 }
 
 interface Payment {
-    processor: string
-    was_authorized: boolean
+    processor: string;
+    was_authorized: boolean;
 }
 
 interface CreditCard {

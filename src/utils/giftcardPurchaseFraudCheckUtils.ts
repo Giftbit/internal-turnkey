@@ -12,8 +12,8 @@ export function getMinfraudParamsForGiftcardPurchase(params: GiftcardPurchaseFra
             domain: params.recipientEmail.replace(/.*@/, "")
         },
         billing: {
-            first_name: params.name ? params.name.split(' ').slice(0, -1).join(' ') : "",
-            last_name: params.name ? params.name.split(' ').slice(-1).join(' ') : "",
+            first_name: params.name ? params.name.split(" ").slice(0, -1).join(" ") : "",
+            last_name: params.name ? params.name.split(" ").slice(-1).join(" ") : "",
             postal: params.charge.source.address_zip || ""
         },
         payment: {
@@ -29,20 +29,20 @@ export function getMinfraudParamsForGiftcardPurchase(params: GiftcardPurchaseFra
             currency: params.charge.currency.toUpperCase()
         }
     };
-    if (params.charge.source.cvc_check == "pass") {
-        res.credit_card.cvv_result = "Y"
-    } else if (params.charge.source.cvc_check == "fail") {
-        res.credit_card.cvv_result = "N"
+    if (params.charge.source.cvc_check === "pass") {
+        res.credit_card.cvv_result = "Y";
+    } else if (params.charge.source.cvc_check === "fail") {
+        res.credit_card.cvv_result = "N";
     }
-    return res
+    return res;
 }
 
 export interface GiftcardPurchaseFraudCheckParams {
-    request: RouterEvent
-    charge: Charge
-    userId: string
-    recipientEmail: string
-    name?: string
+    request: RouterEvent;
+    charge: Charge;
+    userId: string;
+    recipientEmail: string;
+    name?: string;
 }
 
 function getOriginIpFromRequest(request: RouterEvent): string {

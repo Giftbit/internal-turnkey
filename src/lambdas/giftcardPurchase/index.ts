@@ -90,7 +90,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
             card = await createCard(charge.id, params, config, cardMetadata);
         } catch (err) {
             console.log(`An error occurred during card creation. Error: ${JSON.stringify(err)}.`);
-            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, 'Refunded due to an unexpected error during gift card creation in Lightrail.');
+            await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, "Refunded due to an unexpected error during gift card creation in Lightrail.");
 
             if (err.status === 400) {
                 throw new RestError(httpStatusCode.clientError.BAD_REQUEST, err.body.message);
@@ -114,7 +114,7 @@ router.route("/v1/turnkey/purchaseGiftcard")
         } catch (err) {
             console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
             await rollback(lightrailStripeConfig, merchantStripeConfig, charge, card, `Refunded due to an unexpected error during the gift card delivery step. The gift card ${card.cardId} will be cancelled in Lightrail.`);
-            throw new GiftbitRestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR)
+            throw new GiftbitRestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR);
         }
 
         return {
@@ -135,7 +135,7 @@ async function createCard(userSuppliedId: string, params: GiftcardPurchaseParams
     console.log(`Creating card with params ${JSON.stringify(cardParams)}.`);
     const card: Card = await lightrail.cards.createCard(cardParams);
     console.log(`Created card ${JSON.stringify(card)}.`);
-    return Promise.resolve(card);
+    return card;
 }
 
 function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeModeConfig) {
@@ -189,7 +189,7 @@ async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: 
         replyToAddress: turnkeyConfig.giftEmailReplyToAddress,
     });
     console.log(`Email sent. MessageId: ${sendEmailResponse.MessageId}.`);
-    return Promise.resolve(sendEmailResponse);
+    return sendEmailResponse;
 }
 
 //noinspection JSUnusedGlobalSymbols
@@ -215,14 +215,14 @@ async function validateConfig(auth: giftbitRoutes.jwtauth.AuthorizationBadge, as
         return {config, merchantStripeConfig, lightrailStripeConfig};
     } catch (err) {
         sendErrorNotificaiton(err);
-        throw err
+        throw err;
     }
 }
 
 function validateParams(request: RouterEvent): GiftcardPurchaseParams {
     const params = giftcardPurchaseParams.setParamsFromRequest(request);
     giftcardPurchaseParams.validateParams(params);
-    return params
+    return params;
 }
 
 async function rollback(lightrailStripeConfig: StripeModeConfig, merchantStripeConfig: StripeAuth, charge: Charge, card: Card, reason: string): Promise<void> {
@@ -266,10 +266,10 @@ async function doFraudCheck(lightrailStripeConfig: StripeModeConfig, merchantStr
         console.log(`Sending event on kinesis stream: id: ${charge.id}, payload: ${JSON.stringify(messagePayload)}.`);
         await lambdaComsLib.putMessage("event.dropingiftcard.purchase.fraudcheck", charge.id, messagePayload, lambdaComsLib.kinesisStreamArnToName(process.env["KINESIS_STREAM_ARN"]));
     } catch (err) {
-        console.log(`Exception ${err} occurred while attempting to put ${JSON.stringify(messagePayload)} on kinesis stream. Kinesis Stream Arn = ${process.env["KINESIS_STREAM_ARN"]}.`)
+        console.log(`Exception ${err} occurred while attempting to put ${JSON.stringify(messagePayload)} on kinesis stream. Kinesis Stream Arn = ${process.env["KINESIS_STREAM_ARN"]}.`);
     }
     if (!passedFraudCheck) {
-        await rollback(lightrailStripeConfig, merchantStripeConfig, charge, null, 'The order failed fraud check.');
+        await rollback(lightrailStripeConfig, merchantStripeConfig, charge, null, "The order failed fraud check.");
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card.", "ChargeFailed");
     }
 }
@@ -277,14 +277,14 @@ async function doFraudCheck(lightrailStripeConfig: StripeModeConfig, merchantStr
 function passesMinfraudCheck(minfraudScore: MinfraudScoreResult): boolean {
     if (!minfraudScore) {
         console.log("No minfraud score received. Skipping check.");
-        return true
+        return true;
     } else {
         if (minfraudScore.riskScore > 70 || minfraudScore.ipRiskScore > 70 /* The range is [0.1-99] and represents the likelihood of the purchase being fraudulent. 70 = 70% likely to be fraudulent. */) {
             console.log("Minfraud score above allowed range.");
-            return false
+            return false;
         } else {
             console.log("Minfraud score was within allowed range.");
-            return true
+            return true;
         }
     }
 }
