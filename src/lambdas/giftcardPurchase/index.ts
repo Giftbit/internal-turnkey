@@ -34,7 +34,7 @@ import {getScore} from "../../utils/minfraud/minfraudUtils";
 import {AuthorizationBadge} from "giftbit-cassava-routes/dist/jwtauth";
 import {MinfraudScoreParams} from "../../utils/minfraud/MinfraudScoreParams";
 import {MinfraudScoreResult} from "../../utils/minfraud/MinfraudScoreResult";
-import {ResendGiftCardParams, setParamsFromRequest} from "./ResendGiftCardParams";
+import {DeliverGiftCardParams, setParamsFromRequest} from "./DeliverGiftCardParams";
 
 
 export const router = new cassava.Router();
@@ -45,7 +45,7 @@ const authConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbit
 const roleDefinitionsPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS");
 const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN");
 const assumeGiftcardPurchaseToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN");
-const assumeGiftcardResendToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_RESEND_TOKEN");
+const assumeGiftcardDeliverToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_DELIVER_TOKEN");
 const minfraudConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<MinfraudConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_MINFRAUD");
 router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`, assumeGetSharedSecretToken));
 
@@ -149,18 +149,18 @@ async function purchaseGiftcard(evt: RouterEvent): Promise<RouterResponse> {
 }
 
 // TODO this needs to be wired up in CloudFront before it will work
-router.route("/v1/turnkey/giftcard/resend")
+router.route("/v1/turnkey/giftcard/deliver")
     .method("POST")
     .handler(async request => {
-    console.log("Received request for resend gift card:" + JSON.stringify(request));
+    console.log("Received request for deliver gift card:" + JSON.stringify(request));
     const auth: giftbitRoutes.jwtauth.AuthorizationBadge = request.meta["auth"];
-    metrics.histogram("turnkey.giftcardresend", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
+    metrics.histogram("turnkey.giftcarddeliver", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
     metrics.flush();
-    auth.requireIds("giftbitUserId"); // "cardId" if eventually allowing a sender to resend the gift card.
-    auth.requireScopes("lightrailV1:giftcard:resend");
+    auth.requireIds("giftbitUserId"); // "cardId" if eventually allowing a sender to deliver the gift card.
+    // auth.requireScopes("lightrailV1:giftcard:deliver"); // todo add this back in once RoleDefinitions.json is merged in.
 
     const authorizeAs: string = request.meta["auth-token"].split(".")[1];
-    const assumeToken = (await assumeGiftcardResendToken).assumeToken;
+    const assumeToken = (await assumeGiftcardPurchaseToken).assumeToken; // todo - change back to deliver token
     const params = setParamsFromRequest(request);
 
     lightrail.configure({
@@ -179,23 +179,26 @@ router.route("/v1/turnkey/giftcard/resend")
     console.log("Retrieved transaction:", transaction);
 
     const card = await lightrail.cards.getCardById(params.cardId);
+    if (!card) {
+        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter cardId did not correspond to a card`, "InvalidParamCardIdNoCardFound");
+    }
     if (card.cardType != "GIFT_CARD") {
-        console.log(`Gift card resend endpoint called with a card that is not of type GIFT_CARD. card: ${JSON.stringify(card)}.`);
+        console.log(`Gift card deliver endpoint called with a card that is not of type GIFT_CARD. card: ${JSON.stringify(card)}.`);
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter cardId must be for a GIFT_CARD`, "InvalidParamCardId");
     }
 
-    await updateContactWithResendInfo(card, params);
+    await updateContactWithEmailDeliveryInfo(card, params);
 
     if (!params.message) {
         params.message = transaction.metadata ? transaction.metadata.message : null;
         if (!params.message) {
-            throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter message either be provided or part of the cards's metadata`, "InvalidParamMessage");
+            throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter message either be provided or part of the card's initial transaction metadata`, "InvalidParamMessage");
         }
     }
     if (!params.senderName) {
-        params.senderName = transaction.metadata ? transaction.metadata.senderName : null;
+        params.senderName = transaction.metadata ? transaction.metadata.sender_name : null;
         if (!params.senderName) {
-            throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter senderName either be provided or part of the cards's metadata`, "InvalidParamSenderName");
+            throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter senderName either be provided or part of the card's initial transaction metadata`, "InvalidParamSenderName");
         }
     }
 
@@ -214,12 +217,13 @@ router.route("/v1/turnkey/giftcard/resend")
 
     return {
         body: {
-            success: true
+            success: true,
+            params: params
         }
     };
 });
 
-async function updateContactWithResendInfo(card: Card, params: ResendGiftCardParams) {
+async function updateContactWithEmailDeliveryInfo(card: Card, params: DeliverGiftCardParams) {
     if (card.contactId) {
         console.log(`Card had a contactId ${card.contactId}. Will now lookup contact.`);
         const contact = await lightrail.contacts.getContactById(card.contactId);

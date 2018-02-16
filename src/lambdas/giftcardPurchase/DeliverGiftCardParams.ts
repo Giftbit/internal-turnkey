@@ -2,14 +2,14 @@ import {httpStatusCode, RouterEvent} from "cassava";
 import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 import {isValidEmailAddress} from "../../utils/emailUtils";
 
-export interface ResendGiftCardParams {
+export interface DeliverGiftCardParams {
     cardId: string
     email: string
     message?: string
     senderName?: string
 }
 
-export function setParamsFromRequest(request: RouterEvent): ResendGiftCardParams {
+export function setParamsFromRequest(request: RouterEvent): DeliverGiftCardParams {
     const cardId = request.body.cardId;
     if (!cardId) {
         console.log(`parameter type failed validation. received ${request.body.cardId}`);

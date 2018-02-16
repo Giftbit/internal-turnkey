@@ -30,10 +30,10 @@ Parameters:
   SecureConfigKeyAssumeGiftcardPurchaseToken:
     Type: String
     Description: Name of the Assume Auth token in S3 that can has the scopes required for the giftcard purchase lambda
-  SecureConfigKeyAssumeGiftcardResendToken:
+  SecureConfigKeyAssumeGiftcardDeliverToken:
     Type: String
     Description: Name of the Assume Auth token in S3 that can has the scopes required for the giftcard purchase lambda
-    Default: "assumeGiftcardResendToken.json"
+    Default: "assumeGiftcardResendToken.json" # todo - change to Deliver token once it's added to secure config
   SecureConfigKeyAssumeStorageScopeToken:
     Type: String
     Description: Name of the Assume Auth token in S3 that can be used to access merchant secret key in KVS
@@ -104,7 +104,7 @@ Resources:
           SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
           SECURE_CONFIG_KEY_ROLE_DEFINITIONS: !Ref SecureConfigKeyRoleDefinitions
           SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN: !Ref SecureConfigKeyAssumeGiftcardPurchaseToken
-          SECURE_CONFIG_KEY_ASSUME_GIFTCARD_RESEND_TOKEN: !Ref SecureConfigKeyAssumeGiftcardResendToken
+          SECURE_CONFIG_KEY_ASSUME_GIFTCARD_DELIVER_TOKEN: !Ref SecureConfigKeyAssumeGiftcardDeliverToken
           SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN: !Ref SecureConfigKeyAssumeStorageScopeToken
           SECURE_CONFIG_KEY_SENTRY: !Ref SecureConfigKeySentry
           SECURE_CONFIG_KEY_STRIPE: !Ref SecureConfigKeyStripe
@@ -118,7 +118,7 @@ Resources:
                 - s3:GetObject
               Resource:
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeGiftcardPurchaseToken}"
-                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeGiftcardResendToken}"
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeGiftcardDeliverToken}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeStorageScopeToken}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyDataDog}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeySentry}"
@@ -225,7 +225,7 @@ Resources:
         ShortName: EmailFunction
         Service: Turnkey
       Events:
-        ResendGiftcard:
+        Email:
           Type: Api
           Properties:
             Path: /v1/turnkey/email
