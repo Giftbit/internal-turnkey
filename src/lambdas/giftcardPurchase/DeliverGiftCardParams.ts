@@ -22,12 +22,6 @@ export function setParamsFromRequest(request: RouterEvent): DeliverGiftCardParam
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter recipientEmail must be a valid email address", "InvalidParamRecipientEmail");
     }
 
-    // const message = request.body.message;
-    // if (!message) {
-    //     console.log(`parameter message failed validation. received ${message}`);
-    //     throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter message must be set", "InvalidParamMessage");
-    // }
-
     return {
         cardId: cardId,
         email: email,
