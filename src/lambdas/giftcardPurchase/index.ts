@@ -172,7 +172,7 @@ router.route("/v1/turnkey/giftcard/deliver")
 
         const transactionsResp = await lightrail.cards.transactions.getTransactions(params.cardId, {transactionType: "INITIAL_VALUE"});
         const transaction = transactionsResp.transactions[0];
-        console.log("Retrieved transaction:", transaction);
+        console.log("Retrieved transaction:", JSON.stringify(transaction));
 
         const card = await lightrail.cards.getCardById(params.cardId);
         if (!card) {
