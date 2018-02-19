@@ -10,10 +10,7 @@ import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
 import * as giftcardPurchaseParams from "./GiftcardPurchaseParams";
 import {GiftcardPurchaseParams} from "./GiftcardPurchaseParams";
 import {RECIPIENT_EMAIL} from "./RecipientEmail";
-import {
-    FULLCODE_REPLACMENT_STRING, TurnkeyPublicConfig,
-    validateTurnkeyConfig
-} from "../../utils/TurnkeyConfig";
+import {FULLCODE_REPLACMENT_STRING, TurnkeyPublicConfig, validateTurnkeyConfig} from "../../utils/TurnkeyConfig";
 import * as kvsAccess from "../../utils/kvsAccess";
 import * as stripeAccess from "../../utils/stripeAccess";
 import {EmailGiftCardParams} from "./EmailGiftCardParams";
@@ -151,76 +148,76 @@ async function purchaseGiftcard(evt: RouterEvent): Promise<RouterResponse> {
 router.route("/v1/turnkey/giftcard/deliver")
     .method("POST")
     .handler(async request => {
-    console.log("Received request for deliver gift card:" + JSON.stringify(request));
-    const auth: giftbitRoutes.jwtauth.AuthorizationBadge = request.meta["auth"];
-    metrics.histogram("turnkey.giftcarddeliver", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
-    metrics.flush();
-    auth.requireIds("giftbitUserId");
-    auth.requireScopes("lightrailV1:card:deliver");
+        console.log("Received request for deliver gift card:" + JSON.stringify(request));
+        const auth: giftbitRoutes.jwtauth.AuthorizationBadge = request.meta["auth"];
+        metrics.histogram("turnkey.giftcarddeliver", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
+        metrics.flush();
+        auth.requireIds("giftbitUserId");
+        auth.requireScopes("lightrailV1:card:deliver");
 
-    const authorizeAs: string = request.meta["auth-token"].split(".")[1];
-    const assumeToken = (await assumeGiftcardDeliverToken).assumeToken;
-    const params = setParamsFromRequest(request);
+        const authorizeAs: string = request.meta["auth-token"].split(".")[1];
+        const assumeToken = (await assumeGiftcardDeliverToken).assumeToken;
+        const params = setParamsFromRequest(request);
 
-    lightrail.configure({
-        apiKey: assumeToken,
-        restRoot: "https://" + process.env["LIGHTRAIL_DOMAIN"] + "/v1/",
-        logRequests: true,
-        additionalHeaders: {AuthorizeAs: authorizeAs}
-    });
+        lightrail.configure({
+            apiKey: assumeToken,
+            restRoot: "https://" + process.env["LIGHTRAIL_DOMAIN"] + "/v1/",
+            logRequests: true,
+            additionalHeaders: {AuthorizeAs: authorizeAs}
+        });
 
-    const config: TurnkeyPublicConfig = await turnkeyConfigUtil.getConfig(assumeToken, authorizeAs);
-    console.log(`Fetched public turnkey config: ${JSON.stringify(config)}`);
-    validateTurnkeyConfig(config);
+        const config: TurnkeyPublicConfig = await turnkeyConfigUtil.getConfig(assumeToken, authorizeAs);
+        console.log(`Fetched public turnkey config: ${JSON.stringify(config)}`);
+        validateTurnkeyConfig(config);
 
-    const transactionsResp = await lightrail.cards.transactions.getTransactions(params.cardId, {transactionType: "INITIAL_VALUE"});
-    const transaction = transactionsResp.transactions[0];
-    console.log("Retrieved transaction:", transaction);
+        const transactionsResp = await lightrail.cards.transactions.getTransactions(params.cardId, {transactionType: "INITIAL_VALUE"});
+        const transaction = transactionsResp.transactions[0];
+        console.log("Retrieved transaction:", transaction);
 
-    const card = await lightrail.cards.getCardById(params.cardId);
-    if (!card) {
-        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter cardId did not correspond to a card`, "InvalidParamCardIdNoCardFound");
-    }
-    if (card.cardType != "GIFT_CARD") {
-        console.log(`Gift card deliver endpoint called with a card that is not of type GIFT_CARD. card: ${JSON.stringify(card)}.`);
-        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter cardId must be for a GIFT_CARD`, "InvalidParamCardId");
-    }
+        const card = await lightrail.cards.getCardById(params.cardId);
+        if (!card) {
+            throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter cardId did not correspond to a card`, "InvalidParamCardIdNoCardFound");
+        }
+        if (card.cardType != "GIFT_CARD") {
+            console.log(`Gift card deliver endpoint called with a card that is not of type GIFT_CARD. card: ${JSON.stringify(card)}.`);
+            throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter cardId must be for a GIFT_CARD`, "InvalidParamCardId");
+        }
 
-    await updateContactWithEmailDeliveryInfo(card, params);
+        await updateContactWithEmailDeliveryInfo(card, params);
 
-    if (!params.message) {
-        params.message = transaction.metadata ? transaction.metadata.message : null;
         if (!params.message) {
-            throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter message either be provided or part of the card's initial transaction metadata`, "InvalidParamMessage");
+            params.message = transaction.metadata ? transaction.metadata.message : null;
+            if (!params.message) {
+                throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter message either be provided or part of the card's initial transaction metadata`, "InvalidParamMessage");
+            }
         }
-    }
-    if (!params.senderName) {
-        params.senderName = transaction.metadata ? transaction.metadata.sender_name : null;
         if (!params.senderName) {
-            throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter senderName either be provided or part of the card's initial transaction metadata`, "InvalidParamSenderName");
+            params.senderName = transaction.metadata ? transaction.metadata.sender_name : null;
+            if (!params.senderName) {
+                throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter senderName either be provided or part of the card's initial transaction metadata`, "InvalidParamSenderName");
+            }
         }
-    }
 
-    try {
-        await emailGiftToRecipient({
-            cardId: params.cardId,
-            recipientEmail: params.email,
-            message: params.message,
-            senderName: params.senderName,
-            initialValue: transaction.value
-        }, config);
-    } catch (err) {
-        console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
-        throw new GiftbitRestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR);
-    }
-
-    return {
-        body: {
-            success: true,
-            params: params
+        try {
+            await emailGiftToRecipient({
+                cardId: params.cardId,
+                recipientEmail: params.email,
+                message: params.message,
+                senderName: params.senderName,
+                initialValue: transaction.value
+            }, config);
+        } catch (err) {
+            console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
+            throw new GiftbitRestError(httpStatusCode.serverError.INTERNAL_SERVER_ERROR);
         }
-    };
-});
+
+        return {
+            body: {
+                success: true,
+                params: params
+            }
+        };
+    });
 
 async function updateContactWithEmailDeliveryInfo(card: Card, params: DeliverGiftCardParams) {
     if (card.contactId) {

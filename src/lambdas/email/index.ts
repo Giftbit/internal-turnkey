@@ -1,14 +1,15 @@
 import "babel-polyfill";
 import * as cassava from "cassava";
+import {httpStatusCode} from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as metrics from "giftbit-lambda-metricslib";
 import {errorNotificationWrapper} from "giftbit-cassava-routes/dist/sentry";
 import {getLightrailSourceEmailAddress, sendEmail} from "../../utils/emailUtils";
 import {setParamsFromRequest} from "./EmailParameters";
-import {httpStatusCode} from "cassava";
 import {EmailTemplate} from "./EmailTemplate";
 import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
-const dropinTemplate = require("./templates/dropInDeveloperOnboardEmail.html");
+
+const DROPIN_TEMPLATE = require("./templates/dropInDeveloperOnboardEmail.html");
 const fs = require("fs");
 
 export const router = new cassava.Router();
@@ -20,11 +21,11 @@ const roleDefinitionsPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<an
 const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN");
 router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`, assumeGetSharedSecretToken));
 
-const EMAIL_TEMPLATES: {[key: string]: EmailTemplate} = {
-  dropInDeveloperOnboarding: {
-      content: dropinTemplate,
-      subject: "Getting started with Lightrail's Drop-in Gift Cards",
-  }
+const EMAIL_TEMPLATES: { [key: string]: EmailTemplate } = {
+    dropInDeveloperOnboarding: {
+        content: DROPIN_TEMPLATE,
+        subject: "Getting started with Lightrail's Drop-in Gift Cards",
+    }
 };
 
 router.route("/v1/turnkey/email")

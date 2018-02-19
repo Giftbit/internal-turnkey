@@ -32,7 +32,7 @@ Parameters:
     Description: Name of the Assume Auth token in S3 that can has the scopes required for the giftcard purchase lambda
   SecureConfigKeyAssumeGiftcardDeliverToken:
     Type: String
-    Description: Name of the Assume Auth token in S3 that can has the scopes required for the giftcard purchase lambda
+    Description: Name of the Assume Auth token in S3 that can has the scopes required for the giftcard deliver lambda
     Default: "assumeGiftcardDeliverToken.json" 
   SecureConfigKeyAssumeStorageScopeToken:
     Type: String
@@ -182,8 +182,6 @@ Resources:
           SECURE_CONFIG_KEY_ROLE_DEFINITIONS: !Ref SecureConfigKeyRoleDefinitions
           SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN: !Ref SecureConfigKeyAssumeStorageScopeToken
           SECURE_CONFIG_KEY_SENTRY: !Ref SecureConfigKeySentry
-          SECURE_CONFIG_KEY_STRIPE: !Ref SecureConfigKeyStripe
-          SECURE_CONFIG_KEY_MINFRAUD: !Ref SecureConfigKeyMinfraud
           LIGHTRAIL_EMAIL_DOMAIN_NAME: !Ref EmailDomainName
       Policies:
         - Version: 2012-10-17
@@ -197,8 +195,6 @@ Resources:
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeySentry}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyJwt}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyRoleDefinitions}"
-                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyStripe}"
-                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyMinfraud}"
             - Effect: Allow
               Action:
                 - kms:Decrypt
