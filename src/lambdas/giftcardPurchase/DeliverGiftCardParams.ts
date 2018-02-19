@@ -4,7 +4,7 @@ import {isValidEmailAddress} from "../../utils/emailUtils";
 
 export interface DeliverGiftCardParams {
     cardId: string
-    email: string
+    recipientEmail: string
     message?: string
     senderName?: string
 }
@@ -16,15 +16,15 @@ export function setParamsFromRequest(request: RouterEvent): DeliverGiftCardParam
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter cardId must be set`, "InvalidParamCardId");
     }
 
-    const email = request.body.email;
-    if (!email || !isValidEmailAddress(email)) {
-        console.log(`parameter recipientEmail failed validation. received ${email}`);
+    const recipientEmail = request.body.recipientEmail;
+    if (!recipientEmail || !isValidEmailAddress(recipientEmail)) {
+        console.log(`parameter recipientEmail failed validation. received ${recipientEmail}`);
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter recipientEmail must be a valid email address", "InvalidParamRecipientEmail");
     }
 
     return {
         cardId: cardId,
-        email: email,
+        recipientEmail: recipientEmail,
         message: request.body.message,
         senderName: request.body.senderName,
     }

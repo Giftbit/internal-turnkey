@@ -201,7 +201,7 @@ router.route("/v1/turnkey/giftcard/deliver")
         try {
             await emailGiftToRecipient({
                 cardId: params.cardId,
-                recipientEmail: params.email,
+                recipientEmail: params.recipientEmail,
                 message: params.message,
                 senderName: params.senderName,
                 initialValue: transaction.value
@@ -223,13 +223,13 @@ async function updateContactWithEmailDeliveryInfo(card: Card, params: DeliverGif
     if (card.contactId) {
         console.log(`Card had a contactId ${card.contactId}. Will now lookup contact.`);
         const contact = await lightrail.contacts.getContactById(card.contactId);
-        if (contact.email != params.email) {
-            console.log(`Found contact but email didn't match requested email address to deliver the gift card to. Will now update the email to ${params.email} for contact: ${JSON.stringify(contact)}.`)
-            await lightrail.contacts.updateContact(contact, {email: params.email})
+        if (contact.email != params.recipientEmail) {
+            console.log(`Found contact but email didn't match requested recipientEmail address to deliver the gift card to. Will now update the email to ${params.recipientEmail} for contact: ${JSON.stringify(contact)}.`);
+            await lightrail.contacts.updateContact(contact, {email: params.recipientEmail})
         }
     } else {
-        console.log(`Card did not have a contactId. Will now lookup or create a contact for email ${params.email}.`);
-        const contact = await getOrCreateContact(params.email);
+        console.log(`Card did not have a contactId. Will now lookup or create a contact for email ${params.recipientEmail}.`);
+        const contact = await getOrCreateContact(params.recipientEmail);
         await lightrail.cards.updateCard(card, {contactId: contact.contactId});
     }
 }
