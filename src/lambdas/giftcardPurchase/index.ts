@@ -148,7 +148,6 @@ async function purchaseGiftcard(evt: RouterEvent): Promise<RouterResponse> {
     };
 }
 
-// TODO this needs to be wired up in CloudFront before it will work
 router.route("/v1/turnkey/giftcard/deliver")
     .method("POST")
     .handler(async request => {
@@ -156,11 +155,11 @@ router.route("/v1/turnkey/giftcard/deliver")
     const auth: giftbitRoutes.jwtauth.AuthorizationBadge = request.meta["auth"];
     metrics.histogram("turnkey.giftcarddeliver", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
     metrics.flush();
-    auth.requireIds("giftbitUserId"); // "cardId" if eventually allowing a sender to deliver the gift card.
-    // auth.requireScopes("lightrailV1:giftcard:deliver"); // todo add this back in once RoleDefinitions.json is merged in.
+    auth.requireIds("giftbitUserId");
+    auth.requireScopes("lightrailV1:card:deliver");
 
     const authorizeAs: string = request.meta["auth-token"].split(".")[1];
-    const assumeToken = (await assumeGiftcardPurchaseToken).assumeToken; // todo - change back to deliver token
+    const assumeToken = (await assumeGiftcardDeliverToken).assumeToken;
     const params = setParamsFromRequest(request);
 
     lightrail.configure({
@@ -254,7 +253,6 @@ async function getOrCreateContact(email: string): Promise<Contact> {
 }
 
 async function createCard(userSuppliedId: string, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig, metadata?: any): Promise<Card> {
-
     const contact = await getOrCreateContact(params.recipientEmail);
     console.log(`Got contact ${JSON.stringify(contact)}`);
 

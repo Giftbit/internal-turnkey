@@ -3,7 +3,7 @@ import * as cassava from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as metrics from "giftbit-lambda-metricslib";
 import {errorNotificationWrapper} from "giftbit-cassava-routes/dist/sentry";
-import {sendEmail} from "../../utils/emailUtils";
+import {getLightrailSourceEmailAddress, sendEmail} from "../../utils/emailUtils";
 import {setParamsFromRequest} from "./EmailParameters";
 import {httpStatusCode} from "cassava";
 import {EmailTemplate} from "./EmailTemplate";
@@ -49,7 +49,7 @@ router.route("/v1/turnkey/email")
                 toAddress: params.recipientEmail,
                 subject: params.emailTemplate.subject,
                 body: emailContent,
-                replyToAddress: "notifications@lightrail.com" //todo - fix,
+                replyToAddress: getLightrailSourceEmailAddress()
             });
         } catch (err) {
             console.log(`An error occurred while attempting to send email. Params: Error: ${err}.`);

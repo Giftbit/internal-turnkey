@@ -33,7 +33,7 @@ Parameters:
   SecureConfigKeyAssumeGiftcardDeliverToken:
     Type: String
     Description: Name of the Assume Auth token in S3 that can has the scopes required for the giftcard purchase lambda
-    Default: "assumeGiftcardResendToken.json" # todo - change to Deliver token once it's added to secure config
+    Default: "assumeGiftcardDeliverToken.json" 
   SecureConfigKeyAssumeStorageScopeToken:
     Type: String
     Description: Name of the Assume Auth token in S3 that can be used to access merchant secret key in KVS

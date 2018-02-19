@@ -27,8 +27,12 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailRespo
             }
         },
         ReplyToAddresses: [params.replyToAddress],
-        Source: "notifications@" + process.env["LIGHTRAIL_EMAIL_DOMAIN_NAME"]
+        Source: getLightrailSourceEmailAddress()
     };
     console.log(`Sending email: ${JSON.stringify(eParams)}`);
     return ses.sendEmail(eParams).promise();
+}
+
+export function getLightrailSourceEmailAddress(): string {
+    return "notifications@" + process.env["LIGHTRAIL_EMAIL_DOMAIN_NAME"]
 }
