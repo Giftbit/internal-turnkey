@@ -34,5 +34,5 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailRespo
 }
 
 export function getLightrailSourceEmailAddress(): string {
-    return "notifications@" + process.env["LIGHTRAIL_EMAIL_DOMAIN_NAME"]
+    return "notifications@" + process.env["LIGHTRAIL_EMAIL_DOMAIN_NAME"];
 }

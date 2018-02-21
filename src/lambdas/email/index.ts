@@ -5,12 +5,12 @@ import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as metrics from "giftbit-lambda-metricslib";
 import {errorNotificationWrapper} from "giftbit-cassava-routes/dist/sentry";
 import {getLightrailSourceEmailAddress, sendEmail} from "../../utils/emailUtils";
-import {setParamsFromRequest} from "./EmailParameters";
+import {getParamsFromRequest} from "./EmailParameters";
 import {EmailTemplate} from "./EmailTemplate";
 import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
+import * as fs from "fs";
 
 const DROPIN_TEMPLATE = require("./templates/dropInDeveloperOnboardEmail.html");
-const fs = require("fs");
 
 export const router = new cassava.Router();
 
@@ -25,6 +25,7 @@ const EMAIL_TEMPLATES: { [key: string]: EmailTemplate } = {
     dropInDeveloperOnboarding: {
         content: DROPIN_TEMPLATE,
         subject: "Getting started with Lightrail's Drop-in Gift Cards",
+        requiredScopes: []
     }
 };
 
@@ -36,11 +37,11 @@ router.route("/v1/turnkey/email")
         metrics.flush();
         auth.requireIds("giftbitUserId");
 
-        const params = setParamsFromRequest(evt, EMAIL_TEMPLATES);
+        const params = getParamsFromRequest(evt, EMAIL_TEMPLATES);
         console.log(`Send email requested. Params ${JSON.stringify(params)}.`);
 
-        if (params.emailTemplate.requiredScope) {
-            auth.requireScopes(params.emailTemplate.requiredScope);
+        if (params.emailTemplate.requiredScopes.length > 0) {
+            auth.requireScopes(...params.emailTemplate.requiredScopes);
         }
         let emailContent = fs.readFileSync(params.emailTemplate.content).toString("utf-8");
         emailContent = doEmailReplacement(emailContent, params.replacements);
@@ -76,18 +77,18 @@ export const handler = errorNotificationWrapper(
 
 function doEmailReplacement(emailContent: string, replacements: Object) {
     for (const key of Object.keys(replacements)) {
-        const pattern = new RegExp(`{REPLACEMENT:${key}}`, "g");
-        if (emailContent.search(pattern) == -1) {
+        const pattern = new RegExp(`__${key}__`, "g");
+        if (emailContent.search(pattern) === -1) {
             console.log(`User provided a replacement key ${key} that was not found in the email content.`);
             throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter replacement.${key} is not a replacement key that needs to be replaced in this email.`, "InvalidParamUnknownReplacementKey");
         }
         emailContent = emailContent.replace(pattern, replacements[key]);
     }
-    const regex = /{REPLACEMENT:(.*?)}/g;
+    const regex = /__(.*?)__/g;
     const match = regex.exec(emailContent);
     if (match) {
         console.log(`Found un-replaced string ${match[0]} in email content. Returning 400.`);
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `email has un-replaced value ${match[1]}`, "MissedParameterReplacement");
     }
-    return emailContent
+    return emailContent;
 }

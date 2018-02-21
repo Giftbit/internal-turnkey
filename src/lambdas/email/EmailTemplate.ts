@@ -1,5 +1,5 @@
 export interface EmailTemplate {
-    content: string
-    subject: string
-    requiredScope?: string
+    content: string;
+    subject: string;
+    requiredScopes: string[];
 }

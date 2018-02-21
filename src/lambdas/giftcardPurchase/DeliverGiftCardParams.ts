@@ -3,10 +3,10 @@ import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 import {isValidEmailAddress} from "../../utils/emailUtils";
 
 export interface DeliverGiftCardParams {
-    cardId: string
-    recipientEmail: string
-    message?: string
-    senderName?: string
+    cardId: string;
+    recipientEmail: string;
+    message?: string;
+    senderName?: string;
 }
 
 export function setParamsFromRequest(request: RouterEvent): DeliverGiftCardParams {
@@ -27,5 +27,5 @@ export function setParamsFromRequest(request: RouterEvent): DeliverGiftCardParam
         recipientEmail: recipientEmail,
         message: request.body.message,
         senderName: request.body.senderName,
-    }
+    };
 }

@@ -9,7 +9,7 @@ export interface EmailParameters {
     replacements: Object;
 }
 
-export function setParamsFromRequest(request: RouterEvent, EMAIL_TEMPLATES: {[string: string]: EmailTemplate}): EmailParameters {
+export function getParamsFromRequest(request: RouterEvent, EMAIL_TEMPLATES: { [name: string]: EmailTemplate }): EmailParameters {
     if (!request.body.type || EMAIL_TEMPLATES[request.body.type] == null) {
         console.log(`parameter type failed validation. received ${request.body.type}`);
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter type must belong to [${Object.keys(EMAIL_TEMPLATES).join(", ")}]`, "InvalidParamType");
@@ -33,6 +33,6 @@ export function setParamsFromRequest(request: RouterEvent, EMAIL_TEMPLATES: {[st
         emailTemplate: emailTemplate,
         recipientEmail: recipientEmail,
         replacements: replacements,
-    }
+    };
 }
 

@@ -178,7 +178,7 @@ router.route("/v1/turnkey/giftcard/deliver")
         if (!card) {
             throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter cardId did not correspond to a card`, "InvalidParamCardIdNoCardFound");
         }
-        if (card.cardType != "GIFT_CARD") {
+        if (card.cardType !== "GIFT_CARD") {
             console.log(`Gift card deliver endpoint called with a card that is not of type GIFT_CARD. card: ${JSON.stringify(card)}.`);
             throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter cardId must be for a GIFT_CARD`, "InvalidParamCardId");
         }
@@ -223,9 +223,9 @@ async function updateContactWithEmailDeliveryInfo(card: Card, params: DeliverGif
     if (card.contactId) {
         console.log(`Card had a contactId ${card.contactId}. Will now lookup contact.`);
         const contact = await lightrail.contacts.getContactById(card.contactId);
-        if (contact.email != params.recipientEmail) {
+        if (contact.email !== params.recipientEmail) {
             console.log(`Found contact but email didn't match requested recipientEmail address to deliver the gift card to. Will now update the email to ${params.recipientEmail} for contact: ${JSON.stringify(contact)}.`);
-            await lightrail.contacts.updateContact(contact, {email: params.recipientEmail})
+            await lightrail.contacts.updateContact(contact, {email: params.recipientEmail});
         }
     } else {
         console.log(`Card did not have a contactId. Will now lookup or create a contact for email ${params.recipientEmail}.`);
@@ -238,7 +238,7 @@ async function getOrCreateContact(email: string): Promise<Contact> {
     const contacts = await lightrail.contacts.getContacts({email: email});
     if (contacts.contacts.length > 0) {
         console.log(`Found existing contact ${JSON.stringify(contacts.contacts[0])} to set `);
-        return contacts.contacts[0]
+        return contacts.contacts[0];
     } else {
         const contactParams: CreateContactParams = {
             userSuppliedId: uuid.v4().replace(/-/g, ""),
