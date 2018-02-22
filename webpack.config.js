@@ -49,7 +49,7 @@ module.exports = function (env) {
                         ]
                     },
                     {
-                        test: /\.jpe?g$|\.gif$|\.png$|\.svg$|\.woff$|\.ttf$|\.wav$|\.mp3$/,
+                        test: /\.jpe?g$|\.gif$|\.png$|\.svg$|\.woff$|\.ttf$|\.wav$|\.mp3$|\.html$/,
                         use: [
                             'file-loader'
                         ]

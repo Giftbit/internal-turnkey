@@ -30,6 +30,10 @@ Parameters:
   SecureConfigKeyAssumeGiftcardPurchaseToken:
     Type: String
     Description: Name of the Assume Auth token in S3 that can has the scopes required for the giftcard purchase lambda
+  SecureConfigKeyAssumeGiftcardDeliverToken:
+    Type: String
+    Description: Name of the Assume Auth token in S3 that can has the scopes required for the giftcard deliver lambda
+    Default: "assumeGiftcardDeliverToken.json" 
   SecureConfigKeyAssumeStorageScopeToken:
     Type: String
     Description: Name of the Assume Auth token in S3 that can be used to access merchant secret key in KVS
@@ -100,6 +104,7 @@ Resources:
           SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
           SECURE_CONFIG_KEY_ROLE_DEFINITIONS: !Ref SecureConfigKeyRoleDefinitions
           SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN: !Ref SecureConfigKeyAssumeGiftcardPurchaseToken
+          SECURE_CONFIG_KEY_ASSUME_GIFTCARD_DELIVER_TOKEN: !Ref SecureConfigKeyAssumeGiftcardDeliverToken
           SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN: !Ref SecureConfigKeyAssumeStorageScopeToken
           SECURE_CONFIG_KEY_SENTRY: !Ref SecureConfigKeySentry
           SECURE_CONFIG_KEY_STRIPE: !Ref SecureConfigKeyStripe
@@ -113,6 +118,7 @@ Resources:
                 - s3:GetObject
               Resource:
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeGiftcardPurchaseToken}"
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeGiftcardDeliverToken}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeStorageScopeToken}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyDataDog}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeySentry}"
@@ -149,7 +155,76 @@ Resources:
         PurchaseGiftcard:
           Type: Api
           Properties:
+            Path: /v1/turnkey/giftcard/{proxy+}
+            Method: ANY
+        LegacyPurchaseGiftcard:
+          Type: Api
+          Properties:
             Path: /v1/turnkey/purchaseGiftcard
+            Method: ANY
+
+  EmailFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../dist/email/email.zip
+      Handler: index.handler
+      Runtime: nodejs6.10
+      MemorySize: 128
+      Timeout: 30 # seconds, 300 max
+      Environment:
+        Variables:
+          LIGHTRAIL_DOMAIN: !Ref LightrailDomain
+          PATH_TO_MERCHANT_SHARED_SECRET: !Ref PathToMerchantSharedSecret
+          KINESIS_STREAM_ARN: !Ref KinesisStreamArn
+          SECURE_CONFIG_BUCKET: !Ref SecureConfigBucket
+          SECURE_CONFIG_KEY_DATADOG: !Ref SecureConfigKeyDataDog
+          SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
+          SECURE_CONFIG_KEY_ROLE_DEFINITIONS: !Ref SecureConfigKeyRoleDefinitions
+          SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN: !Ref SecureConfigKeyAssumeStorageScopeToken
+          SECURE_CONFIG_KEY_SENTRY: !Ref SecureConfigKeySentry
+          LIGHTRAIL_EMAIL_DOMAIN_NAME: !Ref EmailDomainName
+      Policies:
+        - Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource:
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeStorageScopeToken}"
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyDataDog}"
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeySentry}"
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyJwt}"
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyRoleDefinitions}"
+            - Effect: Allow
+              Action:
+                - kms:Decrypt
+              Resource:
+                - !Ref SecureConfigKmsArn
+              Condition:
+                StringLike:
+                  "kms:ViaService":
+                    !Sub "s3.${AWS::Region}.amazonaws.com"
+                  "kms:EncryptionContext:aws:s3:arn":
+                    !Sub "arn:aws:s3:::${SecureConfigBucket}/*"
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - kinesis:PutRecord
+                - kinesis:PutRecords
+              Resource:
+                - !Ref KinesisStreamArn
+      Tags:
+        ShortName: EmailFunction
+        Service: Turnkey
+      Events:
+        Email:
+          Type: Api
+          Properties:
+            Path: /v1/turnkey/email
             Method: ANY
 
   StripeFunction:

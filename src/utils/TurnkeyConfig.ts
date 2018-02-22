@@ -20,6 +20,7 @@ export interface TurnkeyPublicConfig {
 }
 
 export const FULLCODE_REPLACMENT_STRING = "{{fullcode}}";
+export const CHECK_CARD_AUTH_REPLACEMENT_STRING = "{{token}}";
 
 /**
  * Validates all config parameters are correctly set.
@@ -33,8 +34,8 @@ export function validateTurnkeyConfig(config: TurnkeyPublicConfig): void {
         throw new GiftbitRestError(424, "Config was not set.", "MissingConfig");
     }
     if (!config.claimLink || !config.claimLink.includes(FULLCODE_REPLACMENT_STRING)) {
-        console.log(`turnkey config claimLink must contain {{fullcode}} for replacement.`);
-        throw new GiftbitRestError(424, "Config claimLink must be set and contain {{fullcode}} for replacement.", "InvalidClaimLink");
+        console.log(`turnkey config claimLink must contain ${FULLCODE_REPLACMENT_STRING} for replacement.`);
+        throw new GiftbitRestError(424, `Config claimLink must be set and contain ${FULLCODE_REPLACMENT_STRING} for replacement.`, "InvalidClaimLink");
     }
     if (!config.companyName) {
         console.log("turnkey config companyName cannot be null");
