@@ -22,7 +22,7 @@ const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVa
 router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`, assumeGetSharedSecretToken));
 
 const EMAIL_TEMPLATES: { [key: string]: EmailTemplate } = {
-    dropInDeveloperOnboarding: {
+    DROP_IN_DEVELOPER_ONBOARDING: {
         content: DROPIN_TEMPLATE,
         subject: "Getting started with Lightrail's Drop-in Gift Cards",
         requiredScopes: []

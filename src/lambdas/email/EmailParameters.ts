@@ -9,12 +9,12 @@ export interface EmailParameters {
     replacements: Object;
 }
 
-export function getParamsFromRequest(request: RouterEvent, EMAIL_TEMPLATES: { [name: string]: EmailTemplate }): EmailParameters {
-    if (!request.body.type || EMAIL_TEMPLATES[request.body.type] == null) {
+export function getParamsFromRequest(request: RouterEvent, emailTemplates: { [name: string]: EmailTemplate }): EmailParameters {
+    if (!request.body.type || emailTemplates[request.body.type] == null) {
         console.log(`parameter type failed validation. received ${request.body.type}`);
-        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter type must belong to [${Object.keys(EMAIL_TEMPLATES).join(", ")}]`, "InvalidParamType");
+        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter type must belong to [${Object.keys(emailTemplates).join(", ")}]`, "InvalidParamType");
     }
-    const emailTemplate = EMAIL_TEMPLATES[request.body.type];
+    const emailTemplate = emailTemplates[request.body.type];
 
     const recipientEmail = request.body.recipientEmail;
     if (!recipientEmail || !isValidEmailAddress(recipientEmail)) {
