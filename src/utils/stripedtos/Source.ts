@@ -7,6 +7,9 @@ export interface Source {
     last4: string,
 }
 
+/**
+ * Primary purpose of this method is to strip unwanted data out of what is returned from Stripe.
+ */
 export function toJson(source: Source) {
     return {
         id: source.id,

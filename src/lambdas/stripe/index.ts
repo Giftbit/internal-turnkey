@@ -146,9 +146,7 @@ router.route("/v1/turnkey/stripe")
 router.route("/v1/turnkey/stripe/customer")
     .method("GET")
     .handler(async request => {
-        console.log(`request.meta["auth"]: ${JSON.stringify(request.meta["auth"])}`);
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = request.meta["auth"];
-        console.log(`auth: ${JSON.stringify(auth)}`);
         auth.requireIds("giftbitUserId");
         auth.requireScopes("lightrailV1:stripe:customer:show");
         const assumeToken = (await assumeGetStripeAuthForRetrieveCustomer).assumeToken;
