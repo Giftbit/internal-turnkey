@@ -1,9 +1,9 @@
 import * as source from "./Source";
 
 export interface Customer {
-    id: string,
-    default_source: string,
-    sources: { data: source.Source[] }
+    id: string;
+    default_source: string;
+    sources: { data: source.Source[] };
 }
 
 /**
@@ -17,7 +17,7 @@ export function toJson(customer: Customer) {
         sources: []
     };
     for (const src of customer.sources.data) {
-        json.sources.push(source.toJson(src))
+        json.sources.push(source.toJson(src));
     }
-    return json
+    return json;
 }

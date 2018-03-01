@@ -5,5 +5,5 @@ export interface StripeCreateChargeParams {
     metadata?: any;
     receipt_email: string;
     source: string;
-    customer?: string
+    customer?: string;
 }
