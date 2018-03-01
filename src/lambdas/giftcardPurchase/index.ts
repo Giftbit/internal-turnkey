@@ -32,7 +32,6 @@ import {AuthorizationBadge} from "giftbit-cassava-routes/dist/jwtauth";
 import {MinfraudScoreParams} from "../../utils/minfraud/MinfraudScoreParams";
 import {MinfraudScoreResult} from "../../utils/minfraud/MinfraudScoreResult";
 import {DeliverGiftCardParams, setParamsFromRequest} from "./DeliverGiftCardParams";
-import * as customer from "../../utils/stripedtos/Customer";
 
 
 export const router = new cassava.Router();
@@ -97,7 +96,7 @@ async function purchaseGiftcard(evt: RouterEvent): Promise<RouterResponse> {
         source: params.stripeCardToken,
         receipt_email: params.senderEmail,
         metadata: chargeAndCardCoreMetadata,
-        customer: "cus_CNXjG14N5QOMjc" // todo - this is hard coded. fix this
+        customer: auth.metadata ? auth.metadata.stripeCustomerId : null
     }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
 
     let card: Card;
@@ -146,36 +145,6 @@ async function purchaseGiftcard(evt: RouterEvent): Promise<RouterResponse> {
         }
     };
 }
-
-
-router.route("/v1/turnkey/giftcard/stripeCustomers/{customerId}")
-    .method("GET")
-    .handler(async request => {
-        const auth: giftbitRoutes.jwtauth.AuthorizationBadge = request.meta["auth"];
-        auth.requireIds("giftbitUserId");
-        // auth.requireScopes("lightrailV1:");
-        const assumeToken = (await assumeGiftcardPurchaseToken).assumeToken;
-        const authorizeAs: string = request.meta["auth-token"].split(".")[1];
-
-        const customerId = request.pathParameters.customerId;
-        console.log(`received customerId ${customerId}`);
-        const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
-
-        console.log(`received mercahnt stripe config ${JSON.stringify(merchantStripeConfig)}`)
-        const stripe = require("stripe")(
-            merchantStripeConfig.access_token
-        );
-
-        let cus: customer.Customer = await stripe.customers.retrieve(
-            customerId,
-        );
-
-        return {
-            body: {
-                customer: customer.toJson(cus)
-            }
-        };
-    });
 
 router.route("/v1/turnkey/giftcard/deliver")
     .method("POST")

@@ -37,6 +37,10 @@ Parameters:
   SecureConfigKeyAssumeStorageScopeToken:
     Type: String
     Description: Name of the Assume Auth token in S3 that can be used to access merchant secret key in KVS
+  SecureConfigKeyAssumeRetrieveStripeCustomerToken:
+    Type: String
+    Description: Name of the Assume Auth token in S3 that can be used to access merchant secret key in KVS
+    Default: "assumeStripeRetrieveCustomerCards.json"
   SecureConfigKeyDataDog:
     Type: String
     Description: Key of the DataDog API key secure config object in S3
@@ -239,9 +243,13 @@ Resources:
         Variables:
           LIGHTRAIL_DOMAIN: !Ref LightrailDomain
           LIGHTRAIL_WEBAPP_DOMAIN: !Ref LightrailWebappDomain
+          PATH_TO_MERCHANT_SHARED_SECRET: !Ref PathToMerchantSharedSecret
           SECURE_CONFIG_BUCKET: !Ref SecureConfigBucket
+          SECURE_CONFIG_KEY_ASSUME_RETRIEVE_STRIPE_CUSTOMER_TOKEN: !Ref SecureConfigKeyAssumeRetrieveStripeCustomerToken
+          SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN: !Ref SecureConfigKeyAssumeStorageScopeToken
           SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
           SECURE_CONFIG_KEY_ROLE_DEFINITIONS: !Ref SecureConfigKeyRoleDefinitions
+          SECURE_CONFIG_KEY_SENTRY: !Ref SecureConfigKeySentry
           SECURE_CONFIG_KEY_STRIPE: !Ref SecureConfigKeyStripe
           STRIPE_CONNECT_STATE_TABLE: !Ref StripeConnectStateTable
       Policies:
@@ -260,6 +268,9 @@ Resources:
               Action:
                 - s3:GetObject
               Resource:
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeRetrieveStripeCustomerToken}"
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeStorageScopeToken}"
+                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeySentry}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyJwt}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyRoleDefinitions}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyStripe}"

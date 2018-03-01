@@ -1,11 +1,15 @@
 import "babel-polyfill";
 import * as cassava from "cassava";
+import {httpStatusCode, RestError} from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as stripeAccess from "../../utils/stripeAccess";
 import * as kvsAccess from "../../utils/kvsAccess";
 import {StripeConnectState} from "./StripeConnectState";
 import {getConfig, TURNKEY_PUBLIC_CONFIG_KEY} from "../../utils/turnkeyConfigStore";
 import {TurnkeyPublicConfig} from "../../utils/TurnkeyConfig";
+import * as customer from "../../utils/stripedtos/Customer";
+import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
+import {errorNotificationWrapper} from "giftbit-cassava-routes/dist/sentry";
 
 export const router = new cassava.Router();
 
@@ -51,7 +55,9 @@ router.route("/v1/turnkey/stripe/callback")
 
 const authConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AuthenticationConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_JWT");
 const roleDefinitionsPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS");
-router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise));
+const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN");
+const assumeGetStripeAuthForRetrieveCustomer = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_RETRIEVE_STRIPE_CUSTOMER_TOKEN");
+router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`, assumeGetSharedSecretToken));
 
 router.route("/v1/turnkey/stripe")
     .method("POST")
@@ -137,5 +143,43 @@ router.route("/v1/turnkey/stripe")
         };
     });
 
+router.route("/v1/turnkey/stripe/customer")
+    .method("GET")
+    .handler(async request => {
+        console.log(`request.meta["auth"]: ${JSON.stringify(request.meta["auth"])}`);
+        const auth: giftbitRoutes.jwtauth.AuthorizationBadge = request.meta["auth"];
+        console.log(`auth: ${JSON.stringify(auth)}`);
+        auth.requireIds("giftbitUserId");
+        auth.requireScopes("lightrailV1:stripe:customer:show");
+        const assumeToken = (await assumeGetStripeAuthForRetrieveCustomer).assumeToken;
+        const authorizeAs: string = request.meta["auth-token"].split(".")[1];
+
+        const customerId = auth.metadata.stripeCustomerId;
+        if (!customerId) {
+            throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "Shopper token metadata.stripeCustomerId cannot be null.");
+        }
+        const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
+
+        const stripe = require("stripe")(
+            merchantStripeConfig.access_token
+        );
+
+        console.log(`Received customerId ${customerId}. Will now attempt to lookup customer.`);
+        let cus: customer.Customer = await stripe.customers.retrieve(
+            customerId,
+        );
+
+        return {
+            body: {
+                customer: customer.toJson(cus)
+            }
+        };
+    });
+
 //noinspection JSUnusedGlobalSymbols
-export const handler = router.getLambdaHandler();
+export const handler = errorNotificationWrapper(
+    process.env["SECURE_CONFIG_BUCKET"],        // the S3 bucket with the Sentry API key
+    process.env["SECURE_CONFIG_KEY_SENTRY"],   // the S3 object key for the Sentry API key
+    router,
+    router.getLambdaHandler()                   // the cassava handler
+);
