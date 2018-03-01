@@ -21,7 +21,7 @@ PARAMETER_OVERRIDES+=" SecureConfigBucket=dev-lightrailsecureconfig-1q7bltwyiihp
 PARAMETER_OVERRIDES+=" SecureConfigKeyAssumeGiftcardPurchaseToken=assumeGiftcardPurchaseToken.json"
 PARAMETER_OVERRIDES+=" SecureConfigKeyAssumeStorageScopeToken=assumeStorageScopeToken.json"
 PARAMETER_OVERRIDES+=" SecureConfigKeyAssumeGiftcardDeliverToken=assumeGiftcardDeliverToken.json"
-PARAMETER_OVERRIDES+=" SecureConfigKeyAssumeRetrieveStripeCustomerToken=assumeStripeRetrieveCustomerCards.json"
+PARAMETER_OVERRIDES+=" SecureConfigKeyAssumeRetrieveStripeAuth=assumeRetrieveStripeAuth.json"
 PARAMETER_OVERRIDES+=" SecureConfigKeyDataDog=datadog.json"
 PARAMETER_OVERRIDES+=" SecureConfigKeySentry=sentry_lambda_services.json"
 PARAMETER_OVERRIDES+=" SecureConfigKeyJwt=authentication_badge_key.json"
