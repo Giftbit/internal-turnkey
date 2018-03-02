@@ -96,7 +96,7 @@ async function purchaseGiftcard(evt: RouterEvent): Promise<RouterResponse> {
         source: params.stripeCardToken,
         receipt_email: params.senderEmail,
         metadata: chargeAndCardCoreMetadata,
-        customer: auth.metadata ? auth.metadata.stripeCustomerId : null
+        customer: auth.metadata ? auth.metadata.stripeCustomerId : undefined
     }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
 
     let card: Card;

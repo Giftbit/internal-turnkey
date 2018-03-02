@@ -56,7 +56,7 @@ router.route("/v1/turnkey/stripe/callback")
 const authConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AuthenticationConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_JWT");
 const roleDefinitionsPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS");
 const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN");
-const assumeGetStripeAuthForRetrieveCustomer = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_RETRIEVE_STRIPE_AUTH");
+const assumeTokenForStripeAuth = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_RETRIEVE_STRIPE_AUTH");
 router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`, assumeGetSharedSecretToken));
 
 router.route("/v1/turnkey/stripe")
@@ -149,23 +149,31 @@ router.route("/v1/turnkey/stripe/customer")
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = request.meta["auth"];
         auth.requireIds("giftbitUserId");
         auth.requireScopes("lightrailV1:stripe:customer:show");
-        const assumeToken = (await assumeGetStripeAuthForRetrieveCustomer).assumeToken;
+        const assumeToken = (await assumeTokenForStripeAuth).assumeToken;
         const authorizeAs: string = request.meta["auth-token"].split(".")[1];
 
-        const customerId = auth.metadata.stripeCustomerId;
+        const customerId = auth.metadata ? auth.metadata.stripeCustomerId : null;
         if (!customerId) {
-            throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "Shopper token metadata.stripeCustomerId cannot be null.");
+            throw new RestError(httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "Shopper token metadata.stripeCustomerId cannot be null.");
         }
         const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
+
+        if (!merchantStripeConfig) {
+            throw new RestError(httpStatusCode.clientError.EXPECTATION_FAILED, "You must connect your Stripe account to your Lightrail account.");
+        }
 
         const stripe = require("stripe")(
             merchantStripeConfig.access_token
         );
 
         console.log(`Received customerId ${customerId}. Will now attempt to lookup customer.`);
-        let cus: customer.Customer = await stripe.customers.retrieve(
-            customerId,
-        );
+        let cus: customer.Customer;
+        try {
+            cus = await stripe.customers.retrieve(customerId);
+        } catch (err) {
+            console.log(`err occurred while retrieving customer. ${JSON.stringify(err)}`);
+            throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "An exception occurred while retrieving customer. The customer may not exist.");
+        }
 
         return {
             body: {

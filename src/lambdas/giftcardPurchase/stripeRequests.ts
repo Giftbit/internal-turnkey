@@ -9,9 +9,6 @@ export async function createCharge(params: StripeCreateChargeParams, lightrailSt
     const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
     params.description = "Lightrail Gift Card charge.";
     console.log(`Creating charge ${JSON.stringify(params)}.`);
-    if (!params.customer) {
-        delete params.customer; // can't provide "customer: null". Stripe takes this as a customer and then expects a customers card token for the source
-    }
 
     let charge: Charge;
     try {
