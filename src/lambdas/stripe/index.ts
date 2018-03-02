@@ -94,7 +94,15 @@ router.route("/v1/turnkey/stripe")
 
         const stripeAuth = await kvsAccess.kvsGet(evt.meta["auth-token"], "stripeAuth");
         if (stripeAuth) {
-            await stripeAccess.revokeStripeAuth(stripeAuth, auth.isTestUser());
+            const account = await stripeAccess.fetchStripeAccount(stripeAuth, auth.isTestUser());
+            if (auth.isTestUser() && (account.email.endsWith("@giftbit.com") || account.email.endsWith("@lightrail.com"))) {
+                // Important: this check skips deauthorizing the Stripe token in Stripe.
+                // Otherwise, if someone disconnects the Stripe account used for the sign-up demo, the demo will be broken for all users.
+                console.log(`Skipping revoking stripe auth since it is an account owned by lightrail. This prevents the stripe account that's connected for the drop-in demo from being deauthorized.`)
+            } else {
+                await stripeAccess.revokeStripeAuth(stripeAuth, auth.isTestUser());
+            }
+
             await kvsAccess.kvsDelete(evt.meta["auth-token"], "stripeAuth");
         }
 
