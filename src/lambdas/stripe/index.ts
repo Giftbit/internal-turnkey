@@ -158,7 +158,7 @@ router.route("/v1/turnkey/stripe/customer")
         auth.requireIds("giftbitUserId");
         auth.requireScopes("lightrailV1:stripe:customer:show");
         const assumeToken = (await assumeTokenForStripeAuth).assumeToken;
-        const authorizeAs: string = request.meta["auth-token"].split(".")[1];
+        const authorizeAs = auth.getAuthorizeAsPayload();
 
         const customerId = auth.metadata ? auth.metadata.stripeCustomerId : null;
         if (!customerId) {
