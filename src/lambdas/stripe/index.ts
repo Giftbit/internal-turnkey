@@ -167,7 +167,7 @@ router.route("/v1/turnkey/stripe/customer")
         const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
 
         if (!merchantStripeConfig) {
-            throw new RestError(httpStatusCode.clientError.EXPECTATION_FAILED, "You must connect your Stripe account to your Lightrail account.");
+            throw new RestError(httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "You must connect your Stripe account to your Lightrail account.");
         }
 
         const stripe = require("stripe")(
