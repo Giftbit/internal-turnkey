@@ -9,6 +9,7 @@ export async function createCharge(params: StripeCreateChargeParams, lightrailSt
     const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
     params.description = "Lightrail Gift Card charge.";
     console.log(`Creating charge ${JSON.stringify(params)}.`);
+
     let charge: Charge;
     try {
         charge = await lightrailStripe.charges.create(params, {

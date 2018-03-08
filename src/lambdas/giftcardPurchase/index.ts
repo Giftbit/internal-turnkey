@@ -70,7 +70,7 @@ async function purchaseGiftcard(evt: RouterEvent): Promise<RouterResponse> {
     auth.requireIds("giftbitUserId");
     auth.requireScopes("lightrailV1:purchaseGiftcard");
 
-    const authorizeAs: string = evt.meta["auth-token"].split(".")[1];
+    const authorizeAs = auth.getAuthorizeAsPayload();
     console.log("AuthorizeAs: " + authorizeAs);
     const assumeToken = (await assumeGiftcardPurchaseToken).assumeToken;
 
@@ -95,7 +95,8 @@ async function purchaseGiftcard(evt: RouterEvent): Promise<RouterResponse> {
         currency: config.currency,
         source: params.stripeCardToken,
         receipt_email: params.senderEmail,
-        metadata: chargeAndCardCoreMetadata
+        metadata: chargeAndCardCoreMetadata,
+        customer: auth.metadata ? auth.metadata.stripeCustomerId : undefined
     }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
 
     let card: Card;
@@ -155,7 +156,7 @@ router.route("/v1/turnkey/giftcard/deliver")
         auth.requireIds("giftbitUserId");
         auth.requireScopes("lightrailV1:card:deliver");
 
-        const authorizeAs: string = request.meta["auth-token"].split(".")[1];
+        const authorizeAs = auth.getAuthorizeAsPayload();
         const assumeToken = (await assumeGiftcardDeliverToken).assumeToken;
         const params = setParamsFromRequest(request);
 

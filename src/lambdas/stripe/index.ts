@@ -1,11 +1,15 @@
 import "babel-polyfill";
 import * as cassava from "cassava";
+import {httpStatusCode, RestError} from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as stripeAccess from "../../utils/stripeAccess";
 import * as kvsAccess from "../../utils/kvsAccess";
 import {StripeConnectState} from "./StripeConnectState";
 import {getConfig, TURNKEY_PUBLIC_CONFIG_KEY} from "../../utils/turnkeyConfigStore";
 import {TurnkeyPublicConfig} from "../../utils/TurnkeyConfig";
+import * as customer from "../../utils/stripedtos/Customer";
+import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
+import {errorNotificationWrapper} from "giftbit-cassava-routes/dist/sentry";
 
 export const router = new cassava.Router();
 
@@ -51,7 +55,9 @@ router.route("/v1/turnkey/stripe/callback")
 
 const authConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AuthenticationConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_JWT");
 const roleDefinitionsPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS");
-router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise));
+const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN");
+const assumeTokenForStripeAuth = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_RETRIEVE_STRIPE_AUTH");
+router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`, assumeGetSharedSecretToken));
 
 router.route("/v1/turnkey/stripe")
     .method("POST")
@@ -145,5 +151,49 @@ router.route("/v1/turnkey/stripe")
         };
     });
 
+router.route("/v1/turnkey/stripe/customer")
+    .method("GET")
+    .handler(async request => {
+        const auth: giftbitRoutes.jwtauth.AuthorizationBadge = request.meta["auth"];
+        auth.requireIds("giftbitUserId");
+        auth.requireScopes("lightrailV1:stripe:customer:show");
+        const assumeToken = (await assumeTokenForStripeAuth).assumeToken;
+        const authorizeAs = auth.getAuthorizeAsPayload();
+
+        const customerId = auth.metadata ? auth.metadata.stripeCustomerId : null;
+        if (!customerId) {
+            throw new RestError(httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "Shopper token metadata.stripeCustomerId cannot be null.");
+        }
+        const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
+
+        if (!merchantStripeConfig) {
+            throw new RestError(httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "You must connect your Stripe account to your Lightrail account.");
+        }
+
+        const stripe = require("stripe")(
+            merchantStripeConfig.access_token
+        );
+
+        console.log(`Received customerId ${customerId}. Will now attempt to lookup customer.`);
+        let cus: customer.Customer;
+        try {
+            cus = await stripe.customers.retrieve(customerId);
+        } catch (err) {
+            console.log(`err occurred while retrieving customer. ${JSON.stringify(err)}`);
+            throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "An exception occurred while retrieving customer. The customer may not exist.");
+        }
+
+        return {
+            body: {
+                customer: customer.toJson(cus)
+            }
+        };
+    });
+
 //noinspection JSUnusedGlobalSymbols
-export const handler = router.getLambdaHandler();
+export const handler = errorNotificationWrapper(
+    process.env["SECURE_CONFIG_BUCKET"],        // the S3 bucket with the Sentry API key
+    process.env["SECURE_CONFIG_KEY_SENTRY"],   // the S3 object key for the Sentry API key
+    router,
+    router.getLambdaHandler()                   // the cassava handler
+);
