@@ -31,7 +31,7 @@ import {getScore} from "../../utils/minfraud/minfraudUtils";
 import {AuthorizationBadge} from "giftbit-cassava-routes/dist/jwtauth";
 import {MinfraudScoreParams} from "../../utils/minfraud/MinfraudScoreParams";
 import {MinfraudScoreResult} from "../../utils/minfraud/MinfraudScoreResult";
-import {DeliverGiftCardParams, setParamsFromRequest} from "./DeliverGiftCardParams";
+import {setParamsFromRequest} from "./DeliverGiftCardParams";
 
 
 export const router = new cassava.Router();
@@ -184,19 +184,13 @@ router.route("/v1/turnkey/giftcard/deliver")
             throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter cardId must be for a GIFT_CARD`, "InvalidParamCardId");
         }
 
-        await updateContactWithEmailDeliveryInfo(card, params);
+        await changeContact(card, params.recipientEmail);
 
         if (!params.message) {
             params.message = transaction.metadata ? transaction.metadata.message : null;
-            if (!params.message) {
-                throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter message either be provided or part of the card's initial transaction metadata`, "InvalidParamMessage");
-            }
         }
         if (!params.senderName) {
             params.senderName = transaction.metadata ? transaction.metadata.sender_name : null;
-            if (!params.senderName) {
-                throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter senderName either be provided or part of the card's initial transaction metadata`, "InvalidParamSenderName");
-            }
         }
 
         try {
@@ -220,19 +214,9 @@ router.route("/v1/turnkey/giftcard/deliver")
         };
     });
 
-async function updateContactWithEmailDeliveryInfo(card: Card, params: DeliverGiftCardParams) {
-    if (card.contactId) {
-        console.log(`Card had a contactId ${card.contactId}. Will now lookup contact.`);
-        const contact = await lightrail.contacts.getContactById(card.contactId);
-        if (contact.email !== params.recipientEmail) {
-            console.log(`Found contact but email didn't match requested recipientEmail address to deliver the gift card to. Will now update the email to ${params.recipientEmail} for contact: ${JSON.stringify(contact)}.`);
-            await lightrail.contacts.updateContact(contact, {email: params.recipientEmail});
-        }
-    } else {
-        console.log(`Card did not have a contactId. Will now lookup or create a contact for email ${params.recipientEmail}.`);
-        const contact = await getOrCreateContact(params.recipientEmail);
-        await lightrail.cards.updateCard(card, {contactId: contact.contactId});
-    }
+async function changeContact(card: Card, recipientEmail: string) {
+    const contact = await getOrCreateContact(recipientEmail);
+    await lightrail.cards.updateCard(card, {contactId: contact.contactId});
 }
 
 async function getOrCreateContact(email: string): Promise<Contact> {
