@@ -21,9 +21,9 @@ export function setParamsFromRequest(request: RouterEvent, auth: giftbitRoutes.j
         recipientEmail: request.body.recipientEmail,
         senderEmail: request.body.senderEmail,
         senderName: request.body.senderName,
-        stripeCardToken: request.body.stripeCardToken,
-        stripeCardId: request.body.stripeCardId,
-        stripeCustomerId: auth.metadata ? auth.metadata.stripeCustomerId : undefined
+        stripeCardToken: request.body.stripeCardToken ? request.body.stripeCardToken : null,
+        stripeCardId: request.body.stripeCardId ? request.body.stripeCardId : null,
+        stripeCustomerId: auth.metadata ? auth.metadata.stripeCustomerId : null
     };
 }
 
