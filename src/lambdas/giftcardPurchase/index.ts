@@ -82,7 +82,7 @@ async function purchaseGiftcard(evt: RouterEvent): Promise<RouterResponse> {
     });
 
     const {config, merchantStripeConfig, lightrailStripeConfig} = await validateConfig(auth, assumeToken, authorizeAs);
-    const params = validateGiftcardPurchaseParams(evt);
+    const params = validateGiftcardPurchaseParams(evt, auth);
     const chargeAndCardCoreMetadata = {
         sender_name: params.senderName,
         sender_email: params.senderEmail,
@@ -97,7 +97,7 @@ async function purchaseGiftcard(evt: RouterEvent): Promise<RouterResponse> {
         source: usingSavedCard ? params.stripeCardId : params.stripeCardToken,
         receipt_email: params.senderEmail,
         metadata: chargeAndCardCoreMetadata,
-        customer: (usingSavedCard && auth.metadata) ? auth.metadata.stripeCustomerId : undefined
+        customer: usingSavedCard ? params.stripeCustomerId : undefined
     }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
 
     let card: Card;
@@ -334,8 +334,8 @@ async function validateConfig(auth: giftbitRoutes.jwtauth.AuthorizationBadge, as
     }
 }
 
-function validateGiftcardPurchaseParams(request: RouterEvent): GiftcardPurchaseParams {
-    const params = giftcardPurchaseParams.setParamsFromRequest(request);
+function validateGiftcardPurchaseParams(request: RouterEvent, auth: giftbitRoutes.jwtauth.AuthorizationBadge): GiftcardPurchaseParams {
+    const params = giftcardPurchaseParams.setParamsFromRequest(request, auth);
     giftcardPurchaseParams.validateParams(params);
     return params;
 }
