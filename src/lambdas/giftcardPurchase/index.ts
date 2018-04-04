@@ -90,13 +90,14 @@ async function purchaseGiftcard(evt: RouterEvent): Promise<RouterResponse> {
         message: params.message
     };
 
+    const usingSavedCard: boolean = params.stripeCardId !== null;
     let charge: Charge = await createCharge({
         amount: params.initialValue,
         currency: config.currency,
-        source: params.stripeCardToken,
+        source: usingSavedCard ? params.stripeCardId : params.stripeCardToken,
         receipt_email: params.senderEmail,
         metadata: chargeAndCardCoreMetadata,
-        customer: auth.metadata ? auth.metadata.stripeCustomerId : undefined
+        customer: (usingSavedCard && auth.metadata) ? auth.metadata.stripeCustomerId : undefined
     }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
 
     let card: Card;

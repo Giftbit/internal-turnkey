@@ -8,7 +8,8 @@ export interface GiftcardPurchaseParams {
     recipientEmail: string;
     senderEmail: string;
     senderName?: string;
-    stripeCardToken: string;
+    stripeCardToken?: string;
+    stripeCardId?: string;
 }
 
 export function setParamsFromRequest(request: RouterEvent): GiftcardPurchaseParams {
@@ -18,7 +19,8 @@ export function setParamsFromRequest(request: RouterEvent): GiftcardPurchasePara
         recipientEmail: request.body.recipientEmail,
         senderEmail: request.body.senderEmail,
         senderName: request.body.senderName,
-        stripeCardToken: request.body.stripeCardToken
+        stripeCardToken: request.body.stripeCardToken,
+        stripeCardId: request.body.stripeCardId
     };
 }
 
@@ -38,8 +40,13 @@ export function validateParams(params: GiftcardPurchaseParams): void {
         throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter senderEmail must be a valid email", "InvalidParamSenderEmail");
     }
 
-    if (!params.stripeCardToken) {
-        console.log(`parameter stripeCardToken failed validation. received ${params.stripeCardToken}`);
-        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter stripeCardToken must be set", "InvalidParamStripeCardToken");
+    if (!params.stripeCardToken && !params.stripeCardId) {
+        console.log(`parameters stripeCardToken and stripeCardId failed validation. received ${params.stripeCardToken}, ${params.stripeCardId} respectively`);
+        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter stripeCardToken or stripeCardId must be set", "InvalidParamStripeCardTokens");
+    }
+
+    if (params.stripeCardToken && params.stripeCardId) {
+        console.log(`parameters stripeCardToken and stripeCardId failed validation. received ${params.stripeCardToken}, ${params.stripeCardId} respectively`);
+        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter stripeCardToken and stripeCardId cannot both be set", "InvalidParamStripeCardTokens");
     }
 }
