@@ -36,7 +36,7 @@
     "chai": "^4.1.0",
     "dynameh": "^2.10.3",
     "file-loader": "^1.1.11",
-    "giftbit-cassava-routes": "git+ssh://git@github.com/Giftbit/giftbit-cassava-routes.git#semver:^5.5.1",
+    "giftbit-cassava-routes": "git+ssh://git@github.com/Giftbit/giftbit-cassava-routes.git#semver:^5.5.3",
     "giftbit-lambda-comslib": "git+ssh://git@github.com/Giftbit/giftbit-lambda-comslib.git#semver:^1.14.1",
     "giftbit-lambda-metricslib": "git+ssh://git@github.com/Giftbit/giftbit-lambda-metricslib.git#semver:^2.0.0",
     "json-loader": "^0.5.7",
