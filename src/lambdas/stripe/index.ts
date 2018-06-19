@@ -187,6 +187,7 @@ router.route("/v1/turnkey/stripe/customer")
         const stripe = require("stripe")(
             merchantStripeConfig.access_token
         );
+        stripe.setApiVersion("2016-07-06");
 
         console.log(`Received customerId ${customerId}. Will now attempt to lookup customer.`);
         let cus: customer.Customer;
