@@ -91,6 +91,20 @@ router.route("/v1/turnkey/stripe")
         };
     });
 
+// This is a placeholder endpoint to receive webhook notifications from Stripe so that we comply with their requirements for extensions and platforms:
+// https://docs.google.com/document/d/1r5CA-as-l0FQ-yj9gru8xtRxrkXx1paau8_iMQAX8CQ/edit?ts=5b16ab25#
+// If we start to care about what's coming into this endpoint, we should validate the events we're receiving:
+// https://stripe.com/docs/webhooks/signatures
+router.route("/v1/turnkey/stripe/webhook")
+    .method("POST")
+    .handler(async evt => {
+        console.log(JSON.stringify(evt));
+        return {
+            statusCode: 200,
+            body: null,
+        };
+    });
+
 router.route("/v1/turnkey/stripe")
     .method("DELETE")
     .handler(async evt => {
