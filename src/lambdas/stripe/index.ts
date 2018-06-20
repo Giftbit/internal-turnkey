@@ -183,16 +183,16 @@ router.route("/v1/turnkey/stripe/customer")
         if (!merchantStripeConfig) {
             throw new RestError(httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "You must connect your Stripe account to your Lightrail account.");
         }
-
+        const lightrailStripeConfig = await stripeAccess.getStripeConfig(auth.isTestUser());
         const stripe = require("stripe")(
-            merchantStripeConfig.access_token
+            lightrailStripeConfig.secretKey
         );
         stripe.setApiVersion("2016-07-06");
 
         console.log(`Received customerId ${customerId}. Will now attempt to lookup customer.`);
         let cus: customer.Customer;
         try {
-            cus = await stripe.customers.retrieve(customerId);
+            cus = await stripe.customers.retrieve(customerId, {stripe_account: merchantStripeConfig.stripe_user_id});
         } catch (err) {
             console.log(`err occurred while retrieving customer. ${JSON.stringify(err)}`);
             throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "An exception occurred while retrieving customer. The customer may not exist.");
