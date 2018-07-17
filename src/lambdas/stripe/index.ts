@@ -53,6 +53,20 @@ router.route("/v1/turnkey/stripe/callback")
         };
     });
 
+// This is a placeholder endpoint to receive webhook notifications from Stripe so that we comply with their requirements for extensions and platforms:
+// https://docs.google.com/document/d/1r5CA-as-l0FQ-yj9gru8xtRxrkXx1paau8_iMQAX8CQ/edit?ts=5b16ab25#
+// If we start to care about what's coming into this endpoint, we should validate the events we're receiving:
+// https://stripe.com/docs/webhooks/signatures
+router.route("/v1/turnkey/stripe/webhook")
+    .method("POST")
+    .handler(async evt => {
+        console.log(JSON.stringify(evt));
+        return {
+            statusCode: 200,
+            body: null,
+        };
+    });
+
 const authConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AuthenticationConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_JWT");
 const roleDefinitionsPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS");
 const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN");
@@ -104,7 +118,7 @@ router.route("/v1/turnkey/stripe")
             if (auth.isTestUser() && (account.email.endsWith("@giftbit.com") || account.email.endsWith("@lightrail.com"))) {
                 // Important: this check skips deauthorizing the Stripe connect access token in Stripe for lightrail stripe accounts.
                 // Otherwise, if someone disconnects the Stripe account used for the sign-up demo, the demo will be broken for all users.
-                console.log(`Skipping revoking stripe auth since it is an account owned by lightrail. This prevents the stripe account that's connected for the drop-in demo from being deauthorized. Account id = ${account.id} and email = ${account.email}.`)
+                console.log(`Skipping revoking stripe auth since it is an account owned by lightrail. This prevents the stripe account that's connected for the drop-in demo from being deauthorized. Account id = ${account.id} and email = ${account.email}.`);
             } else {
                 await stripeAccess.revokeStripeAuth(stripeAuth, auth.isTestUser());
             }
@@ -169,15 +183,16 @@ router.route("/v1/turnkey/stripe/customer")
         if (!merchantStripeConfig) {
             throw new RestError(httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "You must connect your Stripe account to your Lightrail account.");
         }
-
+        const lightrailStripeConfig = await stripeAccess.getStripeConfig(auth.isTestUser());
         const stripe = require("stripe")(
-            merchantStripeConfig.access_token
+            lightrailStripeConfig.secretKey
         );
+        stripe.setApiVersion("2016-07-06");
 
         console.log(`Received customerId ${customerId}. Will now attempt to lookup customer.`);
         let cus: customer.Customer;
         try {
-            cus = await stripe.customers.retrieve(customerId);
+            cus = await stripe.customers.retrieve(customerId, {stripe_account: merchantStripeConfig.stripe_user_id});
         } catch (err) {
             console.log(`err occurred while retrieving customer. ${JSON.stringify(err)}`);
             throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "An exception occurred while retrieving customer. The customer may not exist.");

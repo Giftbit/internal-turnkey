@@ -7,6 +7,7 @@ import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 
 export async function createCharge(params: StripeCreateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Charge> {
     const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
+    lightrailStripe.setApiVersion("2016-07-06");
     params.description = "Lightrail Gift Card charge.";
     console.log(`Creating charge ${JSON.stringify(params)}.`);
 
@@ -33,6 +34,7 @@ export async function createCharge(params: StripeCreateChargeParams, lightrailSt
 
 export async function updateCharge(chargeId: string, params: StripeUpdateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<any> {
     const merchantStripe = require("stripe")(lightrailStripeSecretKey);
+    merchantStripe.setApiVersion("2016-07-06");
     console.log(`Updating charge ${JSON.stringify(params)}.`);
     const chargeUpdate = await merchantStripe.charges.update(
         chargeId,
@@ -47,6 +49,7 @@ export async function updateCharge(chargeId: string, params: StripeUpdateChargeP
 
 export async function createRefund(chargeId: string, lightrailStripeSecretKey: string, merchantStripeAccountId: string, reason?: string): Promise<Refund> {
     const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
+    lightrailStripe.setApiVersion("2016-07-06");
     console.log(`Creating refund for charge ${chargeId}.`);
     const refund = await lightrailStripe.refunds.create({
         charge: chargeId,
