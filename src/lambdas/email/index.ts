@@ -1,9 +1,7 @@
-import "babel-polyfill";
 import * as cassava from "cassava";
 import {httpStatusCode} from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as metrics from "giftbit-lambda-metricslib";
-import {errorNotificationWrapper} from "giftbit-cassava-routes/dist/sentry";
 import {getLightrailSourceEmailAddress, sendEmail} from "../../utils/emailUtils";
 import {getParamsFromRequest} from "./EmailParameters";
 import {EmailTemplate} from "./EmailTemplate";
@@ -65,15 +63,14 @@ router.route("/v1/turnkey/email")
         };
     });
 
-export const handler = errorNotificationWrapper(
-    process.env["SECURE_CONFIG_BUCKET"],        // the S3 bucket with the Sentry API key
-    process.env["SECURE_CONFIG_KEY_SENTRY"],   // the S3 object key for the Sentry API key
-    router,
-    metrics.wrapLambdaHandler(
-        process.env["SECURE_CONFIG_BUCKET"],        // the S3 bucket with the DataDog API key
-        process.env["SECURE_CONFIG_KEY_DATADOG"],   // the S3 object key for the DataDog API key
-        router.getLambdaHandler()                   // the cassava handler
-    ));
+//noinspection JSUnusedGlobalSymbols
+export const handler = metrics.wrapLambdaHandler({
+    secureConfig: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_DATADOG"),
+    handler: giftbitRoutes.sentry.wrapLambdaHandler({
+        router,
+        secureConfig: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_SENTRY")
+    })
+});
 
 function doEmailReplacement(emailContent: string, replacements: Object) {
     for (const key of Object.keys(replacements)) {

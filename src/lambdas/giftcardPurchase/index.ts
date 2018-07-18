@@ -1,4 +1,3 @@
-import "babel-polyfill";
 import * as cassava from "cassava";
 import {httpStatusCode, RestError, RouterEvent, RouterResponse} from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
@@ -16,7 +15,6 @@ import * as stripeAccess from "../../utils/stripeAccess";
 import {EmailGiftCardParams} from "./EmailGiftCardParams";
 import {createCharge, createRefund, updateCharge} from "./stripeRequests";
 import * as metrics from "giftbit-lambda-metricslib";
-import {errorNotificationWrapper, sendErrorNotificaiton} from "giftbit-cassava-routes/dist/sentry";
 import {SendEmailResponse} from "aws-sdk/clients/ses";
 import {sendEmail} from "../../utils/emailUtils";
 import {CreateCardParams, CreateContactParams} from "lightrail-client/dist/params";
@@ -32,7 +30,6 @@ import {AuthorizationBadge} from "giftbit-cassava-routes/dist/jwtauth";
 import {MinfraudScoreParams} from "../../utils/minfraud/MinfraudScoreParams";
 import {MinfraudScoreResult} from "../../utils/minfraud/MinfraudScoreResult";
 import {setParamsFromRequest} from "./DeliverGiftCardParams";
-
 
 export const router = new cassava.Router();
 
@@ -308,15 +305,13 @@ async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: 
 }
 
 //noinspection JSUnusedGlobalSymbols
-export const handler = errorNotificationWrapper(
-    process.env["SECURE_CONFIG_BUCKET"],        // the S3 bucket with the Sentry API key
-    process.env["SECURE_CONFIG_KEY_SENTRY"],   // the S3 object key for the Sentry API key
-    router,
-    metrics.wrapLambdaHandler(
-        process.env["SECURE_CONFIG_BUCKET"],        // the S3 bucket with the DataDog API key
-        process.env["SECURE_CONFIG_KEY_DATADOG"],   // the S3 object key for the DataDog API key
-        router.getLambdaHandler()                   // the cassava handler
-    ));
+export const handler = metrics.wrapLambdaHandler({
+    secureConfig: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_DATADOG"),
+    handler: giftbitRoutes.sentry.wrapLambdaHandler({
+        router,
+        secureConfig: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_SENTRY")
+    })
+});
 
 async function validateConfig(auth: giftbitRoutes.jwtauth.AuthorizationBadge, assumeToken: string, authorizeAs: string): Promise<{ config: TurnkeyPublicConfig, merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeModeConfig }> {
     try {
@@ -329,7 +324,7 @@ async function validateConfig(auth: giftbitRoutes.jwtauth.AuthorizationBadge, as
         validateStripeConfig(merchantStripeConfig, lightrailStripeConfig);
         return {config, merchantStripeConfig, lightrailStripeConfig};
     } catch (err) {
-        sendErrorNotificaiton(err);
+        giftbitRoutes.sentry.sendErrorNotification(err);
         throw err;
     }
 }

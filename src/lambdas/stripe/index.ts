@@ -1,4 +1,3 @@
-import "babel-polyfill";
 import * as cassava from "cassava";
 import {httpStatusCode, RestError} from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
@@ -9,7 +8,6 @@ import {getConfig, TURNKEY_PUBLIC_CONFIG_KEY} from "../../utils/turnkeyConfigSto
 import {TurnkeyPublicConfig} from "../../utils/TurnkeyConfig";
 import * as customer from "../../utils/stripedtos/Customer";
 import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
-import {errorNotificationWrapper} from "giftbit-cassava-routes/dist/sentry";
 
 export const router = new cassava.Router();
 
@@ -206,9 +204,7 @@ router.route("/v1/turnkey/stripe/customer")
     });
 
 //noinspection JSUnusedGlobalSymbols
-export const handler = errorNotificationWrapper(
-    process.env["SECURE_CONFIG_BUCKET"],        // the S3 bucket with the Sentry API key
-    process.env["SECURE_CONFIG_KEY_SENTRY"],   // the S3 object key for the Sentry API key
+export const handler = giftbitRoutes.sentry.wrapLambdaHandler({
     router,
-    router.getLambdaHandler()                   // the cassava handler
-);
+    secureConfig: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_SENTRY")
+});
