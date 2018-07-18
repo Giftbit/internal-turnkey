@@ -14,10 +14,12 @@ export const router = new cassava.Router();
 
 router.route(new cassava.routes.LoggingRoute());
 
-const authConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AuthenticationConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_JWT");
-const roleDefinitionsPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS");
-const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN");
-router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`, assumeGetSharedSecretToken));
+router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(
+    giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AuthenticationConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_JWT"),
+    giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS"),
+    `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`,
+    giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN"))
+);
 
 const EMAIL_TEMPLATES: { [key: string]: EmailTemplate } = {
     DROP_IN_DEVELOPER_ONBOARDING: {
@@ -42,7 +44,7 @@ router.route("/v1/turnkey/email")
             auth.requireScopes(...params.emailTemplate.requiredScopes);
         }
         let emailContent = fs.readFileSync(params.emailTemplate.content).toString("utf-8");
-        emailContent = doEmailReplacement(emailContent, params.replacements);
+        emailContent = replaceEmailPlaceholders(emailContent, params.replacements);
 
         try {
             await sendEmail({
@@ -72,7 +74,7 @@ export const handler = metrics.wrapLambdaHandler({
     })
 });
 
-function doEmailReplacement(emailContent: string, replacements: Object) {
+function replaceEmailPlaceholders(emailContent: string, replacements: {[key: string]: string}): string {
     for (const key of Object.keys(replacements)) {
         const pattern = new RegExp(`__${key}__`, "g");
         if (emailContent.search(pattern) === -1) {

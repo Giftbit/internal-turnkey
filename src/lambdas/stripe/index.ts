@@ -1,5 +1,4 @@
 import * as cassava from "cassava";
-import {httpStatusCode, RestError} from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as stripeAccess from "../../utils/stripeAccess";
 import * as kvsAccess from "../../utils/kvsAccess";
@@ -174,12 +173,12 @@ router.route("/v1/turnkey/stripe/customer")
 
         const customerId = auth.metadata ? auth.metadata.stripeCustomerId : null;
         if (!customerId) {
-            throw new RestError(httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "Shopper token metadata.stripeCustomerId cannot be null.");
+            throw new cassava.RestError(cassava.httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "Shopper token metadata.stripeCustomerId cannot be null.");
         }
         const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
 
         if (!merchantStripeConfig) {
-            throw new RestError(httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "You must connect your Stripe account to your Lightrail account.");
+            throw new cassava.RestError(cassava.httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "You must connect your Stripe account to your Lightrail account.");
         }
         const lightrailStripeConfig = await stripeAccess.getStripeConfig(auth.isTestUser());
         const stripe = require("stripe")(
@@ -193,7 +192,7 @@ router.route("/v1/turnkey/stripe/customer")
             cus = await stripe.customers.retrieve(customerId, {stripe_account: merchantStripeConfig.stripe_user_id});
         } catch (err) {
             console.log(`err occurred while retrieving customer. ${JSON.stringify(err)}`);
-            throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "An exception occurred while retrieving customer. The customer may not exist.");
+            throw new cassava.RestError(cassava.httpStatusCode.clientError.BAD_REQUEST, "An exception occurred while retrieving customer. The customer may not exist.");
         }
 
         return {
