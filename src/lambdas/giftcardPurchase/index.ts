@@ -1,7 +1,6 @@
 import * as cassava from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as lightrail from "lightrail-client";
-import * as lambdaComsLib from "giftbit-lambda-comslib";
 import * as metrics from "giftbit-lambda-metricslib";
 import {Card} from "lightrail-client/dist/model";
 import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
@@ -21,13 +20,9 @@ import {Charge} from "../../utils/stripedtos/Charge";
 import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
 import {StripeModeConfig} from "../../utils/stripedtos/StripeConfig";
 import {formatCurrency} from "../../utils/currencyUtils";
-import {getMinfraudParamsForGiftcardPurchase} from "../../utils/giftcardPurchaseFraudCheckUtils";
 import {MinfraudConfig} from "../../utils/minfraud/MinfraudConfig";
-import {getScore} from "../../utils/minfraud/minfraudUtils";
-import {AuthorizationBadge} from "giftbit-cassava-routes/dist/jwtauth";
-import {MinfraudScoreParams} from "../../utils/minfraud/MinfraudScoreParams";
-import {MinfraudScoreResult} from "../../utils/minfraud/MinfraudScoreResult";
 import {setParamsFromRequest} from "./DeliverGiftCardParams";
+import {passesFraudCheck} from "./passesFraudCheck";
 
 export const router = new cassava.Router();
 
@@ -35,7 +30,6 @@ router.route(new cassava.routes.LoggingRoute());
 
 const assumeGiftcardPurchaseToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN");
 const assumeGiftcardDeliverToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_DELIVER_TOKEN");
-const minfraudConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<MinfraudConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_MINFRAUD");
 router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(
     giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AuthenticationConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_JWT"),
     giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS"),
@@ -99,7 +93,11 @@ async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassava.Route
 
     let card: Card;
 
-    await doFraudCheck(lightrailStripeConfig, merchantStripeConfig, params, charge, evt, auth);
+    const passedFraudCheck = await passesFraudCheck(params, charge, evt);
+    if (!passedFraudCheck) {
+        await rollback(lightrailStripeConfig, merchantStripeConfig, charge, null, "The order failed fraud check.");
+        throw new GiftbitRestError(cassava.httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card.", "ChargeFailed");
+    }
 
     try {
         const cardMetadata = {
@@ -306,61 +304,3 @@ async function rollback(lightrailStripeConfig: StripeModeConfig, merchantStripeC
     }
 }
 
-async function doFraudCheck(lightrailStripeConfig: StripeModeConfig, merchantStripeConfig: StripeAuth, giftcardPurchaseParams: GiftcardPurchaseParams, charge: Charge, request: cassava.RouterEvent, auth: AuthorizationBadge): Promise<void> {
-    const passedStripeCheck = passesStripeCheck(charge);
-
-    const minfraudScoreParams: MinfraudScoreParams = getMinfraudParamsForGiftcardPurchase({
-        request: request,
-        charge: charge,
-        userId: auth.merchantId,
-        recipientEmail: giftcardPurchaseParams.recipientEmail,
-        name: giftcardPurchaseParams.senderName
-    });
-    let minfraudScore: MinfraudScoreResult;
-
-    if (!auth.isTestUser()) {
-        try {
-            minfraudScore = await getScore(minfraudScoreParams, minfraudConfigPromise);
-        } catch (err) {
-            console.log(`Unexpected error occurred during fraud check. Simply logging the exception and carrying on with request. ${err}`);
-        }
-    }
-    let passedMinfraudCheck = passesMinfraudCheck(minfraudScore);
-
-    const passedFraudCheck = passedStripeCheck && passedMinfraudCheck;
-    const messagePayload = {
-        giftcardPurchaseParams: giftcardPurchaseParams,
-        minfraudScoreParams: minfraudScoreParams,
-        minfraudScore: minfraudScore,
-        passedFraudCheck: passedFraudCheck
-    };
-    try {
-        console.log(`Sending event on kinesis stream: id: ${charge.id}, payload: ${JSON.stringify(messagePayload)}.`);
-        await lambdaComsLib.putMessage("event.dropingiftcard.purchase.fraudcheck", charge.id, messagePayload, lambdaComsLib.kinesisStreamArnToName(process.env["KINESIS_STREAM_ARN"]));
-    } catch (err) {
-        console.log(`Exception ${err} occurred while attempting to put ${JSON.stringify(messagePayload)} on kinesis stream. Kinesis Stream Arn = ${process.env["KINESIS_STREAM_ARN"]}.`);
-    }
-    if (!passedFraudCheck) {
-        await rollback(lightrailStripeConfig, merchantStripeConfig, charge, null, "The order failed fraud check.");
-        throw new GiftbitRestError(cassava.httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card.", "ChargeFailed");
-    }
-}
-
-function passesMinfraudCheck(minfraudScore: MinfraudScoreResult): boolean {
-    if (!minfraudScore) {
-        console.log("No minfraud score received. Skipping check.");
-        return true;
-    } else {
-        if (minfraudScore.riskScore > 70 || minfraudScore.ipRiskScore > 70 /* The range is [0.1-99] and represents the likelihood of the purchase being fraudulent. 70 = 70% likely to be fraudulent. */) {
-            console.log("Minfraud score above allowed range.");
-            return false;
-        } else {
-            console.log("Minfraud score was within allowed range.");
-            return true;
-        }
-    }
-}
-
-function passesStripeCheck(charge: Charge): boolean {
-    return !charge.review;
-}
