@@ -6,23 +6,18 @@ import {Card} from "lightrail-client/dist/model";
 import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
 import * as giftcardPurchaseParams from "./GiftcardPurchaseParams";
 import {GiftcardPurchaseParams} from "./GiftcardPurchaseParams";
-import {RECIPIENT_EMAIL} from "./RecipientEmail";
-import {FULLCODE_REPLACMENT_STRING, TurnkeyPublicConfig, validateTurnkeyConfig} from "../../utils/TurnkeyConfig";
 import * as kvsAccess from "../../utils/kvsAccess";
 import * as stripeAccess from "../../utils/stripeAccess";
 import * as lightrailV1Access from "./lightrailV1Access";
-import {EmailGiftCardParams} from "./EmailGiftCardParams";
 import {createCharge, createRefund, updateCharge} from "./stripeRequests";
-import {SendEmailResponse} from "aws-sdk/clients/ses";
-import {sendEmail} from "../../utils/emailUtils";
 import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 import {Charge} from "../../utils/stripedtos/Charge";
 import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
 import {StripeModeConfig} from "../../utils/stripedtos/StripeConfig";
-import {formatCurrency} from "../../utils/currencyUtils";
-import {MinfraudConfig} from "../../utils/minfraud/MinfraudConfig";
 import {setParamsFromRequest} from "./DeliverGiftCardParams";
 import {passesFraudCheck} from "./passesFraudCheck";
+import {emailGiftToRecipient} from "./emailGiftToRecipient";
+import {TurnkeyPublicConfig, validateTurnkeyConfig} from "../../utils/TurnkeyConfig";
 
 export const router = new cassava.Router();
 
@@ -123,7 +118,7 @@ async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassava.Route
             metadata: {...chargeAndCardCoreMetadata, lightrail_gift_card_id: card.cardId}
         }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
         await emailGiftToRecipient({
-            cardId: card.cardId,
+            fullcode: (await lightrail.cards.getFullcode(card.cardId)).code,
             recipientEmail: params.recipientEmail,
             message: params.message,
             senderName: params.senderName,
@@ -191,7 +186,7 @@ router.route("/v1/turnkey/giftcard/deliver")
 
         try {
             await emailGiftToRecipient({
-                cardId: params.cardId,
+                fullcode: (await lightrail.cards.getFullcode(card.cardId)).code,
                 recipientEmail: params.recipientEmail,
                 message: params.message,
                 senderName: params.senderName,
@@ -218,50 +213,6 @@ function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeC
         console.log("Lightrail stripe secretKey could not be loaded from s3 secure config.");
         throw new cassava.RestError(cassava.httpStatusCode.serverError.INTERNAL_SERVER_ERROR);
     }
-}
-
-async function emailGiftToRecipient(params: EmailGiftCardParams, turnkeyConfig: TurnkeyPublicConfig): Promise<SendEmailResponse> {
-    const fullcode: string = (await lightrail.cards.getFullcode(params.cardId)).code;
-    console.log(`retrieved fullcode lastFour ${fullcode.substring(fullcode.length - 4)}`);
-    const claimLink = turnkeyConfig.claimLink.replace(FULLCODE_REPLACMENT_STRING, fullcode);
-    const from = params.senderName ? `From ${params.senderName}` : "";
-    const emailSubject = turnkeyConfig.emailSubject ? turnkeyConfig.emailSubject : `You have received a gift card for ${turnkeyConfig.companyName}`;
-    params.message = params.message ? params.message : "Hi there, please enjoy this gift.";
-
-    let emailTemplate = RECIPIENT_EMAIL;
-    const templateReplacements = [
-        {key: "fullcode", value: fullcode},
-        {key: "claimLink", value: claimLink},
-        {key: "senderFrom", value: from},
-        {key: "emailSubject", value: emailSubject},
-        {key: "message", value: params.message},
-        {key: "initialValue", value: formatCurrency(params.initialValue, turnkeyConfig.currency)},
-        {key: "additionalInfo", value: turnkeyConfig.additionalInfo || " "},
-        {key: "claimLink", value: turnkeyConfig.claimLink},
-        {key: "companyName", value: turnkeyConfig.companyName},
-        {key: "companyWebsiteUrl", value: turnkeyConfig.companyWebsiteUrl},
-        {key: "copyright", value: turnkeyConfig.copyright},
-        {key: "copyrightYear", value: new Date().getUTCFullYear().toString()},
-        {key: "customerSupportEmail", value: turnkeyConfig.customerSupportEmail},
-        {key: "linkToPrivacy", value: turnkeyConfig.linkToPrivacy},
-        {key: "linkToTerms", value: turnkeyConfig.linkToTerms},
-        {key: "logo", value: turnkeyConfig.logo},
-        {key: "termsAndConditions", value: turnkeyConfig.termsAndConditions},
-    ];
-
-    for (const replacement of templateReplacements) {
-        const regexp = new RegExp(`__${replacement.key}__`, "g");
-        emailTemplate = emailTemplate.replace(regexp, replacement.value);
-    }
-
-    const sendEmailResponse = await sendEmail({
-        toAddress: params.recipientEmail,
-        subject: emailSubject,
-        body: emailTemplate,
-        replyToAddress: turnkeyConfig.giftEmailReplyToAddress,
-    });
-    console.log(`Email sent. MessageId: ${sendEmailResponse.MessageId}.`);
-    return sendEmailResponse;
 }
 
 //noinspection JSUnusedGlobalSymbols
