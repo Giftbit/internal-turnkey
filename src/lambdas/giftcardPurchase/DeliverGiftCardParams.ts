@@ -9,23 +9,25 @@ export interface DeliverGiftCardParams {
     senderName?: string;
 }
 
-export function setParamsFromRequest(request: RouterEvent): DeliverGiftCardParams {
-    const cardId = request.body.cardId;
-    if (!cardId) {
-        console.log(`parameter type failed validation. received ${request.body.cardId}`);
-        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter cardId must be set`, "InvalidParamCardId");
-    }
+export namespace DeliverGiftCardParams {
+    export function getFromRequest(request: RouterEvent): DeliverGiftCardParams {
+        const cardId = request.body.cardId;
+        if (!cardId) {
+            console.log(`parameter type failed validation. received ${request.body.cardId}`);
+            throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, `parameter cardId must be set`, "InvalidParamCardId");
+        }
 
-    const recipientEmail = request.body.recipientEmail;
-    if (!recipientEmail || !isValidEmailAddress(recipientEmail)) {
-        console.log(`parameter recipientEmail failed validation. received ${recipientEmail}`);
-        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter recipientEmail must be a valid email address", "InvalidParamRecipientEmail");
-    }
+        const recipientEmail = request.body.recipientEmail;
+        if (!recipientEmail || !isValidEmailAddress(recipientEmail)) {
+            console.log(`parameter recipientEmail failed validation. received ${recipientEmail}`);
+            throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter recipientEmail must be a valid email address", "InvalidParamRecipientEmail");
+        }
 
-    return {
-        cardId: cardId,
-        recipientEmail: recipientEmail,
-        message: request.body.message,
-        senderName: request.body.senderName,
-    };
+        return {
+            cardId: cardId,
+            recipientEmail: recipientEmail,
+            message: request.body.message,
+            senderName: request.body.senderName,
+        };
+    }
 }
