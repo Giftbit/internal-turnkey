@@ -2,15 +2,17 @@ import * as cassava from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as metrics from "giftbit-lambda-metricslib";
 import * as superagent from "superagent";
+import * as uuid from "uuid";
 import {validateConfig} from "./validateConfig";
 import {GiftcardPurchaseParams} from "./GiftcardPurchaseParams";
 import {createCharge, rollbackCharge, updateCharge} from "../../utils/stripeAccess";
 import {Charge} from "../../utils/stripedtos/Charge";
 import {passesFraudCheck} from "./passesFraudCheck";
 import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
-import {TurnkeyPublicConfig} from "../../utils/TurnkeyConfig";
-import * as uuid from "uuid";
+import {TurnkeyPublicConfig, validateTurnkeyConfig} from "../../utils/TurnkeyConfig";
 import {emailGiftToRecipient} from "./emailGiftToRecipient";
+import {DeliverGiftCardV2Params} from "./DeliverGiftCardParams";
+import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
 
 // TODO probably need to redo these for v2
 const assumeGiftcardPurchaseToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN");
@@ -85,7 +87,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
         }, config);
     } catch (err) {
         console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
-        await rollbackCharge(lightrailStripeConfig, merchantStripeConfig, charge, `Refunded due to an unexpected error during the gift card delivery step. The gift card ${card.cardId} will be cancelled in Lightrail.`);
+        await rollbackCharge(lightrailStripeConfig, merchantStripeConfig, charge, `Refunded due to an unexpected error during the gift card delivery step. The value ${value.id} will be cancelled in Lightrail.`);
         await rollbackCreateValue(assumeToken, authorizeAs, value);
         throw new GiftbitRestError(cassava.httpStatusCode.serverError.INTERNAL_SERVER_ERROR);
     }
@@ -98,25 +100,85 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
 }
 
 export async function deliverGiftcard(evt: cassava.RouterEvent): Promise<cassava.RouterResponse> {
-    throw new Error("not implemented");
+    console.log("Received request for deliver gift card:" + JSON.stringify(evt));
+    const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
+    metrics.histogram("turnkey.giftcarddeliver", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
+    metrics.flush();
+    auth.requireIds("giftbitUserId");
+    auth.requireScopes("lightrailV2:value:deliver");
+
+    const authorizeAs = auth.getAuthorizeAsPayload();
+    const assumeToken = (await assumeGiftcardDeliverToken).assumeToken;
+
+    const params = DeliverGiftCardV2Params.getFromRequest(evt);
+
+    const config: TurnkeyPublicConfig = await turnkeyConfigUtil.getConfig(assumeToken, authorizeAs);
+    console.log(`Fetched public turnkey config: ${JSON.stringify(config)}`);
+    validateTurnkeyConfig(config);
+
+    const value = await getValueById(assumeToken, authorizeAs, params.valueId);
+    if (!value) {
+        throw new GiftbitRestError(cassava.httpStatusCode.clientError.BAD_REQUEST, `parameter valueId did not correspond to a value`, "InvalidParamValueIdNoValueFound");
+    }
+
+    await changeContact(assumeToken, authorizeAs, params.valueId, params.recipientEmail);
+
+    if (!params.message) {
+        params.message = value.metadata ? value.metadata.message : null;
+    }
+    if (!params.senderName) {
+        params.senderName = value.metadata ? value.metadata.sender_name : null;
+    }
+
+    try {
+        await emailGiftToRecipient({
+            fullcode: value.code,
+            recipientEmail: params.recipientEmail,
+            message: params.message,
+            senderName: params.senderName,
+            initialValue: value.balance
+        }, config);
+    } catch (err) {
+        console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
+        throw new GiftbitRestError(cassava.httpStatusCode.serverError.INTERNAL_SERVER_ERROR);
+    }
+
+    return {
+        body: {
+            success: true,
+            params: params
+        }
+    };
 }
 
-async function createValue(assumeToken: string, authorizeAs: string, valueId: string, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig, metadata?: object): Promise<{id: string, code: string}> {
+async function createValue(assumeToken: string, authorizeAs: string, valueId: string, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig, metadata?: {[key: string]: any}): Promise<{id: string, code: string}> {
     const response = await superagent.agent()
         .post(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/values`)
         .set("Authorization", `Bearer: ${assumeToken}`)
         .set("AuthorizeAs", authorizeAs)
         .send({
             id: valueId,
-            currency: "",   // TODO
+            currency: "USD",   // TODO
             balance: params.initialValue,
             preTax: false,
             discount: false,
             generateCode: {
                 length: 16,
-                characters: "ABCEDFGHJKLMNPQRSTUVWXYZ3456789"
+                characters: "ABCEDFGHJKLMNPQRSTUVWXYZ3456789"   // skip IO10
             }
         });
+    return response.body;
+}
+
+async function getValueById(assumeToken: string, authorizeAs: string, valueId: string): Promise<{id: string, code: string, balance: number, metadata: {[key: string]: any}}> {
+    const response = await superagent.agent()
+        .get(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/values/${encodeURIComponent(valueId)}?showCode=true`)
+        .set("Authorization", `Bearer: ${assumeToken}`)
+        .set("AuthorizeAs", authorizeAs)
+        .ok(res => res.ok || res.status === 404);
+    if (response.status === 404) {
+        return null;
+    }
     return response.body;
 }
 

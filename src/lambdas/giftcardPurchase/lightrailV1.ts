@@ -12,7 +12,7 @@ import {Charge} from "../../utils/stripedtos/Charge";
 import {emailGiftToRecipient} from "./emailGiftToRecipient";
 import * as metrics from "giftbit-lambda-metricslib";
 import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
-import {DeliverGiftCardParams} from "./DeliverGiftCardParams";
+import {DeliverGiftCardV1Params} from "./DeliverGiftCardParams";
 import {validateConfig} from "./validateConfig";
 import {createCharge, rollbackCharge, updateCharge} from "../../utils/stripeAccess";
 
@@ -123,7 +123,7 @@ export async function deliverGiftcard(evt: cassava.RouterEvent): Promise<cassava
         additionalHeaders: {AuthorizeAs: authorizeAs}
     });
 
-    const params = DeliverGiftCardParams.getFromRequest(evt);
+    const params = DeliverGiftCardV1Params.getFromRequest(evt);
 
     const config: TurnkeyPublicConfig = await turnkeyConfigUtil.getConfig(assumeToken, authorizeAs);
     console.log(`Fetched public turnkey config: ${JSON.stringify(config)}`);
