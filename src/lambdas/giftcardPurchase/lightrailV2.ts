@@ -24,7 +24,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
     metrics.histogram("turnkey.giftcardpurchase", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
     metrics.flush();
     auth.requireIds("giftbitUserId");
-    auth.requireScopes("lightrailV2:purchaseGiftcard");
+    auth.requireScopes("lightrailV2:turnkey:purchase");
 
     const authorizeAs = auth.getAuthorizeAsPayload();
     const assumeToken = (await assumeGiftcardPurchaseToken).assumeToken;
@@ -105,7 +105,7 @@ export async function deliverGiftcard(evt: cassava.RouterEvent): Promise<cassava
     metrics.histogram("turnkey.giftcarddeliver", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
     metrics.flush();
     auth.requireIds("giftbitUserId");
-    auth.requireScopes("lightrailV2:value:deliver");
+    auth.requireScopes("lightrailV2:turnkey:deliver");
 
     const authorizeAs = auth.getAuthorizeAsPayload();
     const assumeToken = (await assumeGiftcardDeliverToken).assumeToken;
@@ -158,14 +158,16 @@ async function createValue(assumeToken: string, authorizeAs: string, valueId: st
         .set("AuthorizeAs", authorizeAs)
         .send({
             id: valueId,
-            currency: "USD",   // TODO
+            currency: config.currency,
+            programId: config.programId,
             balance: params.initialValue,
             preTax: false,
             discount: false,
             generateCode: {
                 length: 16,
                 characters: "ABCEDFGHJKLMNPQRSTUVWXYZ3456789"   // skip IO10
-            }
+            },
+            metadata: metadata
         });
     return response.body;
 }
