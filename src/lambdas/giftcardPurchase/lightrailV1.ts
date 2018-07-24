@@ -50,14 +50,13 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
         customer: usingSavedCard ? params.stripeCustomerId : undefined
     }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
 
-    let card: lightrail.model.Card;
-
     const passedFraudCheck = await passesFraudCheck(params, charge, evt);
     if (!passedFraudCheck) {
         await rollbackCharge(lightrailStripeConfig, merchantStripeConfig, charge, "The order failed fraud check.");
         throw new GiftbitRestError(cassava.httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card.", "ChargeFailed");
     }
 
+    let card: lightrail.model.Card;
     try {
         const cardMetadata = {
             ...chargeAndCardCoreMetadata,
@@ -173,7 +172,7 @@ export async function deliverGiftcard(evt: cassava.RouterEvent): Promise<cassava
     };
 }
 
-async function createCard(userSuppliedId: string, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig, metadata?: any): Promise<Card> {
+async function createCard(userSuppliedId: string, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig, metadata?: object): Promise<Card> {
     const contact = await getOrCreateContact(params.recipientEmail);
     console.log(`Got contact ${JSON.stringify(contact)}`);
 
