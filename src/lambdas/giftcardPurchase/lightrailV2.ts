@@ -13,10 +13,7 @@ import {TurnkeyPublicConfig, validateTurnkeyConfig} from "../../utils/TurnkeyCon
 import {emailGiftToRecipient} from "./emailGiftToRecipient";
 import {DeliverGiftCardV2Params} from "./DeliverGiftCardParams";
 import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
-
-// TODO probably need to redo these for v2
-const assumeGiftcardPurchaseToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN");
-const assumeGiftcardDeliverToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_DELIVER_TOKEN");
+import {assumeGiftcardDeliverToken, assumeGiftcardPurchaseToken} from "./lightrailV1";
 
 export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassava.RouterResponse> {
     console.log("Received request:" + JSON.stringify(evt));
@@ -220,7 +217,7 @@ async function changeContact(assumeToken: string, authorizeAs: string, valueId: 
 async function rollbackCreateValue(assumeToken: string, authorizeAs: string, value: {id: string}): Promise<void> {
     if (value) {
         await superagent.agent()
-            .patch(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/values`)
+            .patch(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/values/${value.id}`)
             .set("Authorization", `Bearer: ${assumeToken}`)
             .set("AuthorizeAs", authorizeAs)
             .send({
