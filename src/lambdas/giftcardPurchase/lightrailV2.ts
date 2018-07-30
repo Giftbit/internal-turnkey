@@ -59,7 +59,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
         };
         value = await createValue(assumeToken, authorizeAs, charge.id, params, config, valueMetadata);
     } catch (err) {
-        console.log(`An error occurred during card creation. Error: ${JSON.stringify(err)}.`);
+        console.log(`An error occurred during Value creation. Error: status=${err.status} method=${err.response.req.method} url=${err.response.req.url} text=${err.response.text}.`);
         await rollbackCharge(lightrailStripeConfig, merchantStripeConfig, charge, "Refunded due to an unexpected error during gift card creation in Lightrail.");
         await rollbackCreateValue(assumeToken, authorizeAs, value);
 
@@ -83,7 +83,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
             initialValue: params.initialValue
         }, config);
     } catch (err) {
-        console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
+        console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: status=${err.status} method=${err.response.req.method} url=${err.response.req.url} text=${err.response.text}.`);
         await rollbackCharge(lightrailStripeConfig, merchantStripeConfig, charge, `Refunded due to an unexpected error during the gift card delivery step. The value ${value.id} will be cancelled in Lightrail.`);
         await rollbackCreateValue(assumeToken, authorizeAs, value);
         throw new GiftbitRestError(cassava.httpStatusCode.serverError.INTERNAL_SERVER_ERROR);
@@ -151,18 +151,18 @@ export async function deliverGiftcard(evt: cassava.RouterEvent): Promise<cassava
 async function createValue(assumeToken: string, authorizeAs: string, valueId: string, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig, metadata?: {[key: string]: any}): Promise<{id: string, code: string}> {
     const response = await superagent.agent()
         .post(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/values`)
-        .set("Authorization", `Bearer: ${assumeToken}`)
+        .set("Authorization", `Bearer ${assumeToken}`)
         .set("AuthorizeAs", authorizeAs)
         .send({
             id: valueId,
             currency: config.currency,
             programId: config.programId,
             balance: params.initialValue,
-            preTax: false,
+            pretax: false,
             discount: false,
             generateCode: {
                 length: 16,
-                characters: "ABCEDFGHJKLMNPQRSTUVWXYZ3456789"   // skip IO10
+                charset: "ABCEDFGHJKLMNPQRSTUVWXYZ3456789"   // skip IO10
             },
             metadata: metadata
         });

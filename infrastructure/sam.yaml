@@ -156,15 +156,20 @@ Resources:
         ShortName: GiftcardPurchaseFunction
         Service: Turnkey
       Events:
-        PurchaseGiftcard:
+        V1PurchaseGiftcard:
           Type: Api
           Properties:
             Path: /v1/turnkey/giftcard/{proxy+}
             Method: ANY
-        LegacyPurchaseGiftcard:
+        V1LegacyPurchaseGiftcard:
           Type: Api
           Properties:
             Path: /v1/turnkey/purchaseGiftcard
+            Method: ANY
+        V2PurchaseGiftcard:
+          Type: Api
+          Properties:
+            Path: /v2/turnkey/giftcard/{proxy+}
             Method: ANY
 
   EmailFunction:
