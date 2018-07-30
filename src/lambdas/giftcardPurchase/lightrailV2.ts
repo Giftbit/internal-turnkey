@@ -150,7 +150,7 @@ export async function deliverGiftcard(evt: cassava.RouterEvent): Promise<cassava
 
 async function createValue(assumeToken: string, authorizeAs: string, valueId: string, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig, metadata?: {[key: string]: any}): Promise<{id: string, code: string}> {
     const response = await superagent.agent()
-        .post(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/values`)
+        .post(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/values?showCode=true`)
         .set("Authorization", `Bearer ${assumeToken}`)
         .set("AuthorizeAs", authorizeAs)
         .send({
