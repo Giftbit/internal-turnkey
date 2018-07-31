@@ -33,7 +33,7 @@ router.route("/v1/turnkey/email")
     .method("POST")
     .handler(async evt => {
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
-        metrics.histogram("turnkey.email", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
+        metrics.histogram("turnkey.v1.email", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
         metrics.flush();
         auth.requireIds("giftbitUserId");
 

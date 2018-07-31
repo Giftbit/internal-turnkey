@@ -2,7 +2,6 @@ import * as cassava from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as metrics from "giftbit-lambda-metricslib";
 import * as superagent from "superagent";
-import * as uuid from "uuid";
 import {validateConfig} from "./validateConfig";
 import {GiftcardPurchaseParams} from "./GiftcardPurchaseParams";
 import {createCharge, rollbackCharge, updateCharge} from "../../utils/stripeAccess";
@@ -18,7 +17,7 @@ import {assumeGiftcardDeliverToken, assumeGiftcardPurchaseToken} from "./lightra
 export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassava.RouterResponse> {
     console.log("Received request:" + JSON.stringify(evt));
     const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
-    metrics.histogram("turnkey.giftcardpurchase", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
+    metrics.histogram("turnkey.v2.giftcardpurchase", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
     metrics.flush();
     auth.requireIds("giftbitUserId");
     auth.requireScopes("lightrailV2:turnkey:purchase");
@@ -99,7 +98,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
 export async function deliverGiftcard(evt: cassava.RouterEvent): Promise<cassava.RouterResponse> {
     console.log("Received request for deliver gift card:" + JSON.stringify(evt));
     const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
-    metrics.histogram("turnkey.giftcarddeliver", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
+    metrics.histogram("turnkey.v2.giftcarddeliver", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
     metrics.flush();
     auth.requireIds("giftbitUserId");
     auth.requireScopes("lightrailV2:turnkey:deliver");
@@ -113,12 +112,12 @@ export async function deliverGiftcard(evt: cassava.RouterEvent): Promise<cassava
     console.log(`Fetched public turnkey config: ${JSON.stringify(config)}`);
     validateTurnkeyConfig(config);
 
-    const value = await getValueById(assumeToken, authorizeAs, params.valueId);
+    const value = await getValueWithCodeById(assumeToken, authorizeAs, params.valueId);
     if (!value) {
         throw new GiftbitRestError(cassava.httpStatusCode.clientError.BAD_REQUEST, `parameter valueId did not correspond to a value`, "InvalidParamValueIdNoValueFound");
     }
 
-    await changeContact(assumeToken, authorizeAs, params.valueId, params.recipientEmail);
+    await updateValueRecipient(assumeToken, authorizeAs, value, params.recipientEmail);
 
     if (!params.message) {
         params.message = value.metadata ? value.metadata.message : null;
@@ -160,16 +159,13 @@ async function createValue(assumeToken: string, authorizeAs: string, valueId: st
             balance: params.initialValue,
             pretax: false,
             discount: false,
-            generateCode: {
-                length: 16,
-                charset: "ABCEDFGHJKLMNPQRSTUVWXYZ3456789"   // skip IO10
-            },
+            generateCode: {},
             metadata: metadata
         });
     return response.body;
 }
 
-async function getValueById(assumeToken: string, authorizeAs: string, valueId: string): Promise<{id: string, code: string, balance: number, metadata: {[key: string]: any}}> {
+async function getValueWithCodeById(assumeToken: string, authorizeAs: string, valueId: string): Promise<{id: string, code: string, balance: number, metadata: {[key: string]: any}}> {
     const response = await superagent.agent()
         .get(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/values/${encodeURIComponent(valueId)}?showCode=true`)
         .set("Authorization", `Bearer: ${assumeToken}`)
@@ -181,36 +177,21 @@ async function getValueById(assumeToken: string, authorizeAs: string, valueId: s
     return response.body;
 }
 
-async function getOrCreateContact(assumeToken: string, authorizeAs: string, email: string): Promise<{id: string}> {
-    const getContactsByEmailResponse = await superagent.agent()
-        .get(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/contacts?email=${encodeURIComponent(email)}`)
-        .set("Authorization", `Bearer: ${assumeToken}`)
-        .set("AuthorizeAs", authorizeAs);
-    if (getContactsByEmailResponse.body.length > 0) {
-        console.log(`Found existing contact ${JSON.stringify(getContactsByEmailResponse.body[0])} to set `);
-        return getContactsByEmailResponse.body[0];
-    }
-
-    const createContactResponse = await superagent.agent()
-        .post(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/contacts`)
-        .set("Authorization", `Bearer: ${assumeToken}`)
-        .set("AuthorizeAs", authorizeAs)
-        .send({
-            id: uuid.v4().replace(/-/g, ""),
-            email: email
-        });
-    return createContactResponse.body;
-}
-
-async function changeContact(assumeToken: string, authorizeAs: string, valueId: string, recipientEmail: string): Promise<void> {
-    const contact = await getOrCreateContact(assumeToken, authorizeAs, recipientEmail);
+async function updateValueRecipient(assumeToken: string, authorizeAs: string, value: {id: string, metadata: {[key: string]: any}}, recipientEmail: string): Promise<void> {
+    const metadata = {
+        ...value.metadata,
+        "giftbit-note": {
+            ...value.metadata["giftbit-note"],
+            recipient: recipientEmail
+        }
+    };
 
     await superagent.agent()
-        .patch(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/contacts/${encodeURIComponent(contact.id)}/values/attach`)
+        .patch(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/values/${encodeURIComponent(value.id)}`)
         .set("Authorization", `Bearer: ${assumeToken}`)
         .set("AuthorizeAs", authorizeAs)
         .send({
-            valueId: valueId
+            metadata
         });
 }
 
