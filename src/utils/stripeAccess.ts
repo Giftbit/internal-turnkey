@@ -88,7 +88,7 @@ export async function fetchStripeAccount(stripeAuth: StripeAuth, test: boolean):
     return null;
 }
 
-export async function createCharge(params: StripeCreateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Charge> {
+export async function createStripeCharge(params: StripeCreateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Charge> {
     const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
     lightrailStripe.setApiVersion("2016-07-06");
     params.description = "Lightrail Gift Card charge.";
@@ -115,7 +115,7 @@ export async function createCharge(params: StripeCreateChargeParams, lightrailSt
     return charge;
 }
 
-export async function updateCharge(chargeId: string, params: StripeUpdateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<any> {
+export async function updateStripeCharge(chargeId: string, params: StripeUpdateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<any> {
     const merchantStripe = require("stripe")(lightrailStripeSecretKey);
     merchantStripe.setApiVersion("2016-07-06");
     console.log(`Updating charge ${JSON.stringify(params)}.`);
@@ -130,7 +130,7 @@ export async function updateCharge(chargeId: string, params: StripeUpdateChargeP
     return chargeUpdate;
 }
 
-export async function createRefund(chargeId: string, lightrailStripeSecretKey: string, merchantStripeAccountId: string, reason?: string): Promise<Refund> {
+export async function createStripeRefund(chargeId: string, lightrailStripeSecretKey: string, merchantStripeAccountId: string, reason?: string): Promise<Refund> {
     const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
     lightrailStripe.setApiVersion("2016-07-06");
     console.log(`Creating refund for charge ${chargeId}.`);
@@ -140,7 +140,7 @@ export async function createRefund(chargeId: string, lightrailStripeSecretKey: s
     }, {
         stripe_account: merchantStripeAccountId
     });
-    await updateCharge(chargeId, {
+    await updateStripeCharge(chargeId, {
         description: reason
     }, lightrailStripeSecretKey, merchantStripeAccountId);
     console.log(JSON.stringify(refund));
@@ -148,6 +148,6 @@ export async function createRefund(chargeId: string, lightrailStripeSecretKey: s
 }
 
 export async function rollbackCharge(lightrailStripeConfig: StripeModeConfig, merchantStripeConfig: StripeAuth, charge: Charge, reason: string): Promise<void> {
-    const refund = await createRefund(charge.id, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id, reason);
+    const refund = await createStripeRefund(charge.id, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id, reason);
     console.log(`Refunded charge ${charge.id}. Refund: ${JSON.stringify(refund)}.`);
 }

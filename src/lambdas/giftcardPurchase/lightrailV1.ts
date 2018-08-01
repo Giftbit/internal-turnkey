@@ -14,7 +14,7 @@ import * as metrics from "giftbit-lambda-metricslib";
 import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
 import {DeliverGiftCardV1Params} from "./DeliverGiftCardParams";
 import {validateConfig} from "./validateConfig";
-import {createCharge, rollbackCharge, updateCharge} from "../../utils/stripeAccess";
+import {createStripeCharge, rollbackCharge, updateStripeCharge} from "../../utils/stripeAccess";
 
 export const assumeGiftcardPurchaseToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN");
 export const assumeGiftcardDeliverToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_DELIVER_TOKEN");
@@ -36,14 +36,14 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
         additionalHeaders: {AuthorizeAs: authorizeAs}
     });
 
-    const {config, merchantStripeConfig, lightrailStripeConfig} = await validateConfig(auth, assumeToken, authorizeAs);
+    const {turnkeyConfig, merchantStripeConfig, lightrailStripeConfig} = await validateConfig(auth, assumeToken, authorizeAs);
     const params = GiftcardPurchaseParams.getFromRequest(evt);
     const chargeAndCardCoreMetadata = GiftcardPurchaseParams.getCoreMetadata(params);
 
     const usingSavedCard: boolean = params.stripeCardId !== null;
-    let charge: Charge = await createCharge({
+    let charge: Charge = await createStripeCharge({
         amount: params.initialValue,
-        currency: config.currency,
+        currency: turnkeyConfig.currency,
         source: usingSavedCard ? params.stripeCardId : params.stripeCardToken,
         receipt_email: params.senderEmail,
         metadata: chargeAndCardCoreMetadata,
@@ -67,7 +67,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
                 recipient: ${params.recipientEmail}`
             }
         };
-        card = await createCard(charge.id, params, config, cardMetadata);
+        card = await createCard(charge.id, params, turnkeyConfig, cardMetadata);
     } catch (err) {
         console.log(`An error occurred during card creation. Error: ${JSON.stringify(err)}.`);
         await rollbackCharge(lightrailStripeConfig, merchantStripeConfig, charge, "Refunded due to an unexpected error during gift card creation in Lightrail.");
@@ -81,8 +81,8 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
     }
 
     try {
-        await updateCharge(charge.id, {
-            description: `${config.companyName} gift card. Purchase reference number: ${card.cardId}.`,
+        await updateStripeCharge(charge.id, {
+            description: `${turnkeyConfig.companyName} gift card. Purchase reference number: ${card.cardId}.`,
             metadata: {...chargeAndCardCoreMetadata, lightrail_gift_card_id: card.cardId}
         }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
         await emailGiftToRecipient({
@@ -91,7 +91,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
             message: params.message,
             senderName: params.senderName,
             initialValue: params.initialValue
-        }, config);
+        }, turnkeyConfig);
     } catch (err) {
         console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
         await rollbackCharge(lightrailStripeConfig, merchantStripeConfig, charge, `Refunded due to an unexpected error during the gift card delivery step. The gift card ${card.cardId} will be cancelled in Lightrail.`);
