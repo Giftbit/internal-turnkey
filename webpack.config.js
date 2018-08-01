@@ -10,6 +10,7 @@ module.exports = function (env) {
 
     return functionsToBuild
         .map(fxn => ({
+            mode: 'production',
             context: path.resolve(__dirname),
             entry: path.join(lambdaFunctionDir, fxn, 'index.ts'),
             output: {
@@ -25,8 +26,8 @@ module.exports = function (env) {
                             {
                                 loader: 'babel-loader',
                                 options: {
-                                    presets: ['es2015'],
-                                    plugins: ["transform-async-to-generator"],
+                                    presets: [['env', {targets: {node: '8.10'}}]],
+                                    plugins: [],
                                     compact: false,
                                     babelrc: false
                                 }
@@ -39,8 +40,8 @@ module.exports = function (env) {
                             {
                                 loader: 'babel-loader',
                                 options: {
-                                    presets: ['es2015'],
-                                    plugins: ["transform-async-to-generator"],
+                                    presets: [['env', {targets: {node: '8.10'}}]],
+                                    plugins: [],
                                     compact: false,
                                     babelrc: false
                                 }
