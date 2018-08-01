@@ -5,6 +5,11 @@ import {StripeAccount} from "./stripedtos/StripeAccount";
 import {StripeConfig, StripeModeConfig} from "./stripedtos/StripeConfig";
 import {StripeAuth} from "./stripedtos/StripeAuth";
 import {StripeAuthErrorResponse} from "./stripedtos/StripeAuthErrorResponse";
+import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
+import {StripeUpdateChargeParams} from "./stripedtos/StripeUpdateChargeParams";
+import {Charge} from "./stripedtos/Charge";
+import {Refund} from "./stripedtos/Refund";
+import {StripeCreateChargeParams} from "./stripedtos/StripeCreateChargeParams";
 
 const stripeConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<StripeConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_STRIPE");
 
@@ -81,4 +86,68 @@ export async function fetchStripeAccount(stripeAuth: StripeAuth, test: boolean):
     }
 
     return null;
+}
+
+export async function createStripeCharge(params: StripeCreateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Charge> {
+    const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
+    lightrailStripe.setApiVersion("2016-07-06");
+    params.description = "Lightrail Gift Card charge.";
+    console.log(`Creating charge ${JSON.stringify(params)}.`);
+
+    let charge: Charge;
+    try {
+        charge = await lightrailStripe.charges.create(params, {
+            stripe_account: merchantStripeAccountId,
+        });
+    } catch (err) {
+        switch (err.type) {
+            case "StripeCardError":
+                throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card..", "ChargeFailed");
+            case "StripeInvalidRequestError":
+                throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "The stripeCardToken was invalid.", "StripeInvalidRequestError");
+            case "RateLimitError":
+                throw new GiftbitRestError(httpStatusCode.clientError.TOO_MANY_REQUESTS, `Service was rate limited by dependent service.`, "DependentServiceRateLimited");
+            default:
+                throw new Error(`An unexpected error occurred while attempting to charge card. error ${err}`);
+        }
+    }
+    console.log(`Created charge ${JSON.stringify(charge)}`);
+    return charge;
+}
+
+export async function updateStripeCharge(chargeId: string, params: StripeUpdateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<any> {
+    const merchantStripe = require("stripe")(lightrailStripeSecretKey);
+    merchantStripe.setApiVersion("2016-07-06");
+    console.log(`Updating charge ${JSON.stringify(params)}.`);
+    const chargeUpdate = await merchantStripe.charges.update(
+        chargeId,
+        params, {
+            stripe_account: merchantStripeAccountId,
+        }
+    );
+    // todo make this a DTO.
+    console.log(`Updated charge ${JSON.stringify(chargeUpdate)}.`);
+    return chargeUpdate;
+}
+
+export async function createStripeRefund(chargeId: string, lightrailStripeSecretKey: string, merchantStripeAccountId: string, reason?: string): Promise<Refund> {
+    const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
+    lightrailStripe.setApiVersion("2016-07-06");
+    console.log(`Creating refund for charge ${chargeId}.`);
+    const refund = await lightrailStripe.refunds.create({
+        charge: chargeId,
+        metadata: {reason: reason || "not specified"} /* Doesn't show up in charge in stripe. Need to update charge so that it's obvious as to why it was refunded. */
+    }, {
+        stripe_account: merchantStripeAccountId
+    });
+    await updateStripeCharge(chargeId, {
+        description: reason
+    }, lightrailStripeSecretKey, merchantStripeAccountId);
+    console.log(JSON.stringify(refund));
+    return refund;
+}
+
+export async function rollbackCharge(lightrailStripeConfig: StripeModeConfig, merchantStripeConfig: StripeAuth, charge: Charge, reason: string): Promise<void> {
+    const refund = await createStripeRefund(charge.id, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id, reason);
+    console.log(`Refunded charge ${charge.id}. Refund: ${JSON.stringify(refund)}.`);
 }

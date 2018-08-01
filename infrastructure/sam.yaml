@@ -95,7 +95,7 @@ Resources:
     Properties:
       CodeUri: ../dist/giftcardPurchase/giftcardPurchase.zip
       Handler: index.handler
-      Runtime: nodejs6.10
+      Runtime: nodejs8.10
       MemorySize: 128
       Timeout: 30 # seconds, 300 max
       Environment:
@@ -156,15 +156,20 @@ Resources:
         ShortName: GiftcardPurchaseFunction
         Service: Turnkey
       Events:
-        PurchaseGiftcard:
+        V1PurchaseGiftcard:
           Type: Api
           Properties:
             Path: /v1/turnkey/giftcard/{proxy+}
             Method: ANY
-        LegacyPurchaseGiftcard:
+        V1LegacyPurchaseGiftcard:
           Type: Api
           Properties:
             Path: /v1/turnkey/purchaseGiftcard
+            Method: ANY
+        V2PurchaseGiftcard:
+          Type: Api
+          Properties:
+            Path: /v2/turnkey/giftcard/{proxy+}
             Method: ANY
 
   EmailFunction:
@@ -172,7 +177,7 @@ Resources:
     Properties:
       CodeUri: ../dist/email/email.zip
       Handler: index.handler
-      Runtime: nodejs6.10
+      Runtime: nodejs8.10
       MemorySize: 128
       Timeout: 30 # seconds, 300 max
       Environment:
@@ -236,7 +241,7 @@ Resources:
     Properties:
       CodeUri: ../dist/stripe/stripe.zip
       Handler: index.handler
-      Runtime: nodejs6.10
+      Runtime: nodejs8.10
       MemorySize: 128
       Timeout: 30 # seconds, 300 max
       Environment:

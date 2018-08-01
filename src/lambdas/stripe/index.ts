@@ -1,6 +1,4 @@
-import "babel-polyfill";
 import * as cassava from "cassava";
-import {httpStatusCode, RestError} from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as stripeAccess from "../../utils/stripeAccess";
 import * as kvsAccess from "../../utils/kvsAccess";
@@ -9,7 +7,6 @@ import {getConfig, TURNKEY_PUBLIC_CONFIG_KEY} from "../../utils/turnkeyConfigSto
 import {TurnkeyPublicConfig} from "../../utils/TurnkeyConfig";
 import * as customer from "../../utils/stripedtos/Customer";
 import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
-import {errorNotificationWrapper} from "giftbit-cassava-routes/dist/sentry";
 
 export const router = new cassava.Router();
 
@@ -50,6 +47,20 @@ router.route("/v1/turnkey/stripe/callback")
             headers: {
                 Location: `https://${process.env["LIGHTRAIL_WEBAPP_DOMAIN"]}/app/`
             }
+        };
+    });
+
+// This is a placeholder endpoint to receive webhook notifications from Stripe so that we comply with their requirements for extensions and platforms:
+// https://docs.google.com/document/d/1r5CA-as-l0FQ-yj9gru8xtRxrkXx1paau8_iMQAX8CQ/edit?ts=5b16ab25#
+// If we start to care about what's coming into this endpoint, we should validate the events we're receiving:
+// https://stripe.com/docs/webhooks/signatures
+router.route("/v1/turnkey/stripe/webhook")
+    .method("POST")
+    .handler(async evt => {
+        console.log(JSON.stringify(evt));
+        return {
+            statusCode: 200,
+            body: null,
         };
     });
 
@@ -104,7 +115,7 @@ router.route("/v1/turnkey/stripe")
             if (auth.isTestUser() && (account.email.endsWith("@giftbit.com") || account.email.endsWith("@lightrail.com"))) {
                 // Important: this check skips deauthorizing the Stripe connect access token in Stripe for lightrail stripe accounts.
                 // Otherwise, if someone disconnects the Stripe account used for the sign-up demo, the demo will be broken for all users.
-                console.log(`Skipping revoking stripe auth since it is an account owned by lightrail. This prevents the stripe account that's connected for the drop-in demo from being deauthorized. Account id = ${account.id} and email = ${account.email}.`)
+                console.log(`Skipping revoking stripe auth since it is an account owned by lightrail. This prevents the stripe account that's connected for the drop-in demo from being deauthorized. Account id = ${account.id} and email = ${account.email}.`);
             } else {
                 await stripeAccess.revokeStripeAuth(stripeAuth, auth.isTestUser());
             }
@@ -162,25 +173,26 @@ router.route("/v1/turnkey/stripe/customer")
 
         const customerId = auth.metadata ? auth.metadata.stripeCustomerId : null;
         if (!customerId) {
-            throw new RestError(httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "Shopper token metadata.stripeCustomerId cannot be null.");
+            throw new cassava.RestError(cassava.httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "Shopper token metadata.stripeCustomerId cannot be null.");
         }
         const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
 
         if (!merchantStripeConfig) {
-            throw new RestError(httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "You must connect your Stripe account to your Lightrail account.");
+            throw new cassava.RestError(cassava.httpStatusCode.clientError.UNPROCESSABLE_ENTITY, "You must connect your Stripe account to your Lightrail account.");
         }
-
+        const lightrailStripeConfig = await stripeAccess.getStripeConfig(auth.isTestUser());
         const stripe = require("stripe")(
-            merchantStripeConfig.access_token
+            lightrailStripeConfig.secretKey
         );
+        stripe.setApiVersion("2016-07-06");
 
         console.log(`Received customerId ${customerId}. Will now attempt to lookup customer.`);
         let cus: customer.Customer;
         try {
-            cus = await stripe.customers.retrieve(customerId);
+            cus = await stripe.customers.retrieve(customerId, {stripe_account: merchantStripeConfig.stripe_user_id});
         } catch (err) {
             console.log(`err occurred while retrieving customer. ${JSON.stringify(err)}`);
-            throw new RestError(httpStatusCode.clientError.BAD_REQUEST, "An exception occurred while retrieving customer. The customer may not exist.");
+            throw new cassava.RestError(cassava.httpStatusCode.clientError.BAD_REQUEST, "An exception occurred while retrieving customer. The customer may not exist.");
         }
 
         return {
@@ -191,9 +203,7 @@ router.route("/v1/turnkey/stripe/customer")
     });
 
 //noinspection JSUnusedGlobalSymbols
-export const handler = errorNotificationWrapper(
-    process.env["SECURE_CONFIG_BUCKET"],        // the S3 bucket with the Sentry API key
-    process.env["SECURE_CONFIG_KEY_SENTRY"],   // the S3 object key for the Sentry API key
+export const handler = giftbitRoutes.sentry.wrapLambdaHandler({
     router,
-    router.getLambdaHandler()                   // the cassava handler
-);
+    secureConfig: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_SENTRY")
+});

@@ -6,7 +6,7 @@ import {GiftbitRestError} from "giftbit-cassava-routes/dist/GiftbitRestError";
 export interface EmailParameters {
     emailTemplate: EmailTemplate;
     recipientEmail: string;
-    replacements: Object;
+    replacements: {[key: string]: string};
 }
 
 export function getParamsFromRequest(request: RouterEvent, emailTemplates: { [name: string]: EmailTemplate }): EmailParameters {
@@ -26,7 +26,7 @@ export function getParamsFromRequest(request: RouterEvent, emailTemplates: { [na
 
     if (replacements && !(replacements instanceof Object)) {
         console.log(`parameter replacement failed validation. received ${replacements}`);
-        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter replacements must be a valid key value key-value map", "InvalidParamReplacements");
+        throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "parameter replacements must be a valid key-value map", "InvalidParamReplacements");
     }
 
     return {
@@ -35,4 +35,3 @@ export function getParamsFromRequest(request: RouterEvent, emailTemplates: { [na
         replacements: replacements,
     };
 }
-
