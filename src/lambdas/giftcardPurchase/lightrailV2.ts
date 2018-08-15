@@ -90,7 +90,8 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
 
     return {
         body: {
-            valueId: value.id
+            valueId: value.id,
+            stripeChargeId: charge.id
         }
     };
 }
