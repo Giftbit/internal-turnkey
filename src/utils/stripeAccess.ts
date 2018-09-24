@@ -91,7 +91,7 @@ export async function fetchStripeAccount(stripeAuth: StripeAuth, test: boolean):
 export async function createStripeCharge(params: StripeCreateChargeParams, lightrailStripeSecretKey: string, merchantStripeAccountId: string): Promise<Charge> {
     const lightrailStripe = require("stripe")(lightrailStripeSecretKey);
     lightrailStripe.setApiVersion("2016-07-06");
-    params.description = "Lightrail Gift Card charge.";
+    params.description = "Gift card purchase";
     console.log(`Creating charge ${JSON.stringify(params)}.`);
 
     let charge: Charge;
