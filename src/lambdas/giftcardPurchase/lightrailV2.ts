@@ -13,6 +13,7 @@ import {emailGiftToRecipient} from "./emailGiftToRecipient";
 import {DeliverGiftCardV2Params} from "./DeliverGiftCardParams";
 import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
 import {assumeGiftcardDeliverToken, assumeGiftcardPurchaseToken} from "./lightrailV1";
+import {formatCurrency} from "../../utils/currencyUtils";
 
 export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassava.RouterResponse> {
     console.log("Received request:" + JSON.stringify(evt));
@@ -45,7 +46,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
         throw new GiftbitRestError(cassava.httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card.", "ChargeFailed");
     }
 
-    let value: {id: string, code: string};
+    let value: {id: string, code: string, currency: string, balance: number};
     try {
         const valueMetadata = {
             ...chargeAndValueCoreMetadata,
@@ -74,12 +75,13 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
             description: `${turnkeyConfig.companyName} gift card. Purchase reference number: ${value.id}.`,
             metadata: {...chargeAndValueCoreMetadata, lightrail_value_id: value.id}
         }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
+        const program = await getProgram(assumeToken, authorizeAs, turnkeyConfig);
         await emailGiftToRecipient({
             fullcode: value.code,
             recipientEmail: params.recipientEmail,
             message: params.message,
             senderName: params.senderName,
-            initialValue: params.initialValue
+            initialValue: getValueLabel(value, program)
         }, turnkeyConfig);
     } catch (err) {
         console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: status=${err.status} method=${err.response.req.method} url=${err.response.req.url} text=${err.response.text}.`);
@@ -128,12 +130,13 @@ export async function deliverGiftcard(evt: cassava.RouterEvent): Promise<cassava
     }
 
     try {
+        const program = await getProgram(assumeToken, authorizeAs, config);
         await emailGiftToRecipient({
             fullcode: value.code,
             recipientEmail: params.recipientEmail,
             message: params.message,
             senderName: params.senderName,
-            initialValue: value.balance
+            initialValue: getValueLabel(value, program)
         }, config);
     } catch (err) {
         console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
@@ -148,7 +151,7 @@ export async function deliverGiftcard(evt: cassava.RouterEvent): Promise<cassava
     };
 }
 
-async function createValue(assumeToken: string, authorizeAs: string, valueId: string, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig, metadata?: {[key: string]: any}): Promise<{id: string, code: string}> {
+async function createValue(assumeToken: string, authorizeAs: string, valueId: string, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig, metadata?: {[key: string]: any}): Promise<{id: string, code: string, currency: string, balance: number}> {
     const response = await superagent.agent()
         .post(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/values?showCode=true`)
         .set("Authorization", `Bearer ${assumeToken}`)
@@ -166,7 +169,15 @@ async function createValue(assumeToken: string, authorizeAs: string, valueId: st
     return response.body;
 }
 
-async function getValueWithCodeById(assumeToken: string, authorizeAs: string, valueId: string): Promise<{id: string, code: string, balance: number, metadata: {[key: string]: any}}> {
+async function getProgram(assumeToken: string, authorizeAs: string, config: TurnkeyPublicConfig): Promise<{id: string, metadata?: {[key: string]: any}}> {
+    const response = await superagent.agent()
+        .get(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/programs/${encodeURIComponent(config.programId)}`)
+        .set("Authorization", `Bearer ${assumeToken}`)
+        .set("AuthorizeAs", authorizeAs);
+    return response.body;
+}
+
+async function getValueWithCodeById(assumeToken: string, authorizeAs: string, valueId: string): Promise<{id: string, code: string, balance: number, currency: string, metadata: {[key: string]: any}}> {
     const response = await superagent.agent()
         .get(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/values/${encodeURIComponent(valueId)}?showCode=true`)
         .set("Authorization", `Bearer: ${assumeToken}`)
@@ -206,4 +217,12 @@ async function rollbackCreateValue(assumeToken: string, authorizeAs: string, val
                 canceled: true
             });
     }
+}
+
+function getValueLabel(value: {balance: number, currency: string}, program: {metadata?: {[key: string]: any}}): string {
+    const balanceString = value.balance + "";
+    if (program.metadata && program.metadata.fixedInitialBalancesLabels && program.metadata.fixedInitialBalancesLabels[balanceString]) {
+        return program.metadata.fixedInitialBalancesLabels[balanceString];
+    }
+    return formatCurrency(value.balance, value.currency);
 }
