@@ -75,7 +75,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
         await rollbackCreateCard(card);
 
         if (err.status === 400) {
-            throw new cassava.RestError(cassava.httpStatusCode.clientError.BAD_REQUEST, err.body.message);
+            throw new cassava.RestError(cassava.httpStatusCode.clientError.BAD_REQUEST, err.message);
         } else {
             throw new cassava.RestError(cassava.httpStatusCode.serverError.INTERNAL_SERVER_ERROR);
         }
