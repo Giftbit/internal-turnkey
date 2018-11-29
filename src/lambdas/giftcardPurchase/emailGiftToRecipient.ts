@@ -1,4 +1,3 @@
-import {formatCurrency} from "../../utils/currencyUtils";
 import {FULLCODE_REPLACMENT_STRING, TurnkeyPublicConfig} from "../../utils/TurnkeyConfig";
 import {sendEmail} from "../../utils/emailUtils";
 import {RECIPIENT_EMAIL} from "./RecipientEmail";
@@ -9,7 +8,7 @@ export interface EmailGiftToRecipientParams {
     message: string;
     recipientEmail: string;
     senderName: string;
-    initialValue: number;
+    initialValue: string;
 }
 
 export async function emailGiftToRecipient(params: EmailGiftToRecipientParams, turnkeyConfig: TurnkeyPublicConfig): Promise<SendEmailResponse> {
@@ -25,7 +24,7 @@ export async function emailGiftToRecipient(params: EmailGiftToRecipientParams, t
         {key: "senderFrom", value: from},
         {key: "emailSubject", value: emailSubject},
         {key: "message", value: params.message},
-        {key: "initialValue", value: formatCurrency(params.initialValue, turnkeyConfig.currency)},
+        {key: "initialValue", value: params.initialValue},
         {key: "additionalInfo", value: turnkeyConfig.additionalInfo || " "},
         {key: "claimLink", value: turnkeyConfig.claimLink},
         {key: "companyName", value: turnkeyConfig.companyName},

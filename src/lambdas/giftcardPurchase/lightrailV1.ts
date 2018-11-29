@@ -15,6 +15,7 @@ import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
 import {DeliverGiftCardV1Params} from "./DeliverGiftCardParams";
 import {validateConfig} from "./validateConfig";
 import {createStripeCharge, rollbackCharge, updateStripeCharge} from "../../utils/stripeAccess";
+import {formatCurrency} from "../../utils/currencyUtils";
 
 export const assumeGiftcardPurchaseToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN");
 export const assumeGiftcardDeliverToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_DELIVER_TOKEN");
@@ -74,7 +75,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
         await rollbackCreateCard(card);
 
         if (err.status === 400) {
-            throw new cassava.RestError(cassava.httpStatusCode.clientError.BAD_REQUEST, err.body.message);
+            throw new cassava.RestError(cassava.httpStatusCode.clientError.BAD_REQUEST, err.message);
         } else {
             throw new cassava.RestError(cassava.httpStatusCode.serverError.INTERNAL_SERVER_ERROR);
         }
@@ -90,7 +91,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
             recipientEmail: params.recipientEmail,
             message: params.message,
             senderName: params.senderName,
-            initialValue: params.initialValue
+            initialValue: formatCurrency(params.initialValue, turnkeyConfig.currency)
         }, turnkeyConfig);
     } catch (err) {
         console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
@@ -157,7 +158,7 @@ export async function deliverGiftcard(evt: cassava.RouterEvent): Promise<cassava
             recipientEmail: params.recipientEmail,
             message: params.message,
             senderName: params.senderName,
-            initialValue: transaction.value
+            initialValue: formatCurrency(transaction.value, config.currency)
         }, config);
     } catch (err) {
         console.log(`An error occurred while attempting to deliver fullcode to recipient. Error: ${err}.`);
