@@ -63,7 +63,16 @@ export namespace GiftcardPurchaseParams {
         }
     }
 
-    export function getCoreMetadata(params: GiftcardPurchaseParams): object {
+    export function getStripeMetadata(params: GiftcardPurchaseParams): object {
+        return {
+            sender_name: params.senderName,
+            sender_email: params.senderEmail,
+            recipient_email: params.recipientEmail,
+            message: params.message && (params.message + "").substring(0, 499)
+        };
+    }
+
+    export function getValueMetadata(params: GiftcardPurchaseParams): object {
         return {
             sender_name: params.senderName,
             sender_email: params.senderEmail,
