@@ -39,7 +39,6 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
 
     const {turnkeyConfig, merchantStripeConfig, lightrailStripeConfig} = await validateConfig(auth, assumeToken, authorizeAs);
     const params = GiftcardPurchaseParams.getFromRequest(evt);
-    const chargeAndCardCoreMetadata = GiftcardPurchaseParams.getCoreMetadata(params);
 
     const usingSavedCard: boolean = params.stripeCardId !== null;
     let charge: Charge = await createStripeCharge({
@@ -47,7 +46,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
         currency: turnkeyConfig.currency,
         source: usingSavedCard ? params.stripeCardId : params.stripeCardToken,
         receipt_email: params.senderEmail,
-        metadata: chargeAndCardCoreMetadata,
+        metadata: GiftcardPurchaseParams.getStripeMetadata(params),
         customer: usingSavedCard ? params.stripeCustomerId : undefined
     }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
 
@@ -60,7 +59,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
     let card: lightrail.model.Card;
     try {
         const cardMetadata = {
-            ...chargeAndCardCoreMetadata,
+            ...GiftcardPurchaseParams.getValueMetadata(params),
             charge_id: charge.id,
             "giftbit-note": {
                 note: `charge_id: ${charge.id},
@@ -84,7 +83,10 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
     try {
         await updateStripeCharge(charge.id, {
             description: `${turnkeyConfig.companyName} gift card. Purchase reference number: ${card.cardId}.`,
-            metadata: {...chargeAndCardCoreMetadata, lightrail_gift_card_id: card.cardId}
+            metadata: {
+                ...GiftcardPurchaseParams.getStripeMetadata(params),
+                lightrail_gift_card_id: card.cardId
+            }
         }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
         await emailGiftToRecipient({
             fullcode: (await lightrail.cards.getFullcode(card.cardId)).code,
