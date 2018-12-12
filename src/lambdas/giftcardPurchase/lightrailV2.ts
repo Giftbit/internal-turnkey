@@ -28,7 +28,6 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
 
     const {turnkeyConfig, merchantStripeConfig, lightrailStripeConfig} = await validateConfig(auth, assumeToken, authorizeAs);
     const params = GiftcardPurchaseParams.getFromRequest(evt);
-    const chargeAndValueCoreMetadata = GiftcardPurchaseParams.getCoreMetadata(params);
 
     const usingSavedCard: boolean = params.stripeCardId !== null;
     let charge: Charge = await createStripeCharge({
@@ -36,7 +35,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
         currency: turnkeyConfig.currency,
         source: usingSavedCard ? params.stripeCardId : params.stripeCardToken,
         receipt_email: params.senderEmail,
-        metadata: chargeAndValueCoreMetadata,
+        metadata: GiftcardPurchaseParams.getStripeMetadata(params),
         customer: usingSavedCard ? params.stripeCustomerId : undefined
     }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
 
@@ -49,7 +48,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
     let value: {id: string, code: string, currency: string, balance: number};
     try {
         const valueMetadata = {
-            ...chargeAndValueCoreMetadata,
+            ...GiftcardPurchaseParams.getValueMetadata(params),
             charge_id: charge.id,
             "giftbit-note": {
                 note: `charge_id: ${charge.id},
@@ -73,7 +72,10 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
     try {
         await updateStripeCharge(charge.id, {
             description: `${turnkeyConfig.companyName} gift card. Purchase reference number: ${value.id}.`,
-            metadata: {...chargeAndValueCoreMetadata, lightrail_value_id: value.id}
+            metadata: {
+                ...GiftcardPurchaseParams.getStripeMetadata(params),
+                lightrail_value_id: value.id
+            }
         }, lightrailStripeConfig.secretKey, merchantStripeConfig.stripe_user_id);
         const program = await getProgram(assumeToken, authorizeAs, turnkeyConfig);
         await emailGiftToRecipient({
