@@ -68,7 +68,7 @@ export namespace GiftcardPurchaseParams {
             sender_name: params.senderName,
             sender_email: params.senderEmail,
             recipient_email: params.recipientEmail,
-            message: params.message && params.message.substring(0, 499)
+            message: params.message && (params.message + "").substring(0, 499)
         };
     }
 
