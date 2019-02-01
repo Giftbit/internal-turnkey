@@ -25,7 +25,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
     const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
     metrics.histogram("turnkey.v1.giftcardpurchase", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
     metrics.flush();
-    auth.requireIds("giftbitUserId");
+    auth.requireIds("userId");
     auth.requireScopes("lightrailV1:purchaseGiftcard");
 
     const authorizeAs = auth.getAuthorizeAsPayload();
@@ -114,7 +114,7 @@ export async function deliverGiftcard(evt: cassava.RouterEvent): Promise<cassava
     const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
     metrics.histogram("turnkey.v1.giftcarddeliver", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
     metrics.flush();
-    auth.requireIds("giftbitUserId");
+    auth.requireIds("userId");
     auth.requireScopes("lightrailV1:card:deliver");
 
     const authorizeAs = auth.getAuthorizeAsPayload();

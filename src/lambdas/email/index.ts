@@ -14,12 +14,13 @@ export const router = new cassava.Router();
 
 router.route(new cassava.routes.LoggingRoute());
 
-router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(
-    giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AuthenticationConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_JWT"),
-    giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS"),
-    `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`,
-    giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN"))
-);
+router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute({
+    authConfigPromise: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AuthenticationConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_JWT"),
+    rolesConfigPromise: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS"),
+    sharedSecretProvider: new giftbitRoutes.jwtauth.sharedSecret.RestSharedSecretProvider(
+        `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`,
+        giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN"))
+}));
 
 const EMAIL_TEMPLATES: { [key: string]: EmailTemplate } = {
     DROP_IN_DEVELOPER_ONBOARDING: {
@@ -35,7 +36,7 @@ router.route("/v1/turnkey/email")
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
         metrics.histogram("turnkey.v1.email", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
         metrics.flush();
-        auth.requireIds("giftbitUserId");
+        auth.requireIds("userId");
 
         const params = getParamsFromRequest(evt, EMAIL_TEMPLATES);
         console.log(`Send email requested. Params ${JSON.stringify(params)}.`);
@@ -74,7 +75,7 @@ export const handler = metrics.wrapLambdaHandler({
     })
 });
 
-function replaceEmailPlaceholders(emailContent: string, replacements: {[key: string]: string}): string {
+function replaceEmailPlaceholders(emailContent: string, replacements: { [key: string]: string }): string {
     for (const key of Object.keys(replacements)) {
         const pattern = new RegExp(`__${key}__`, "g");
         if (emailContent.search(pattern) === -1) {

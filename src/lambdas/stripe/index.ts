@@ -68,13 +68,17 @@ const authConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbit
 const roleDefinitionsPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS");
 const assumeGetSharedSecretToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN");
 const assumeTokenForStripeAuth = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_RETRIEVE_STRIPE_AUTH");
-router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute(authConfigPromise, roleDefinitionsPromise, `https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`, assumeGetSharedSecretToken));
+router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute({
+    authConfigPromise,
+    rolesConfigPromise: roleDefinitionsPromise,
+    sharedSecretProvider: new giftbitRoutes.jwtauth.sharedSecret.RestSharedSecretProvider(`https://${process.env["LIGHTRAIL_DOMAIN"]}${process.env["PATH_TO_MERCHANT_SHARED_SECRET"]}`, assumeGetSharedSecretToken)
+}));
 
 router.route("/v1/turnkey/stripe")
     .method("POST")
     .handler(async evt => {
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
-        auth.requireIds("giftbitUserId");
+        auth.requireIds("userId");
         auth.requireScopes("lightrailV1:stripeConnect:write");
 
         const stripeAuth = await kvsAccess.kvsGet(evt.meta["auth-token"], "stripeAuth");
@@ -106,7 +110,7 @@ router.route("/v1/turnkey/stripe")
     .method("DELETE")
     .handler(async evt => {
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
-        auth.requireIds("giftbitUserId");
+        auth.requireIds("userId");
         auth.requireScopes("lightrailV1:stripeConnect:write");
 
         const stripeAuth = await kvsAccess.kvsGet(evt.meta["auth-token"], "stripeAuth");
@@ -134,7 +138,7 @@ router.route("/v1/turnkey/stripe")
     .method("GET")
     .handler(async evt => {
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
-        auth.requireIds("giftbitUserId");
+        auth.requireIds("userId");
         auth.requireScopes("lightrailV1:stripeConnect:read");
 
         const stripeAuth = await kvsAccess.kvsGet(evt.meta["auth-token"], "stripeAuth");
@@ -166,7 +170,7 @@ router.route("/v1/turnkey/stripe/customer")
     .method("GET")
     .handler(async request => {
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = request.meta["auth"];
-        auth.requireIds("giftbitUserId");
+        auth.requireIds("userId");
         auth.requireScopes("lightrailV1:stripe:customer:show");
         const assumeToken = (await assumeTokenForStripeAuth).assumeToken;
         const authorizeAs = auth.getAuthorizeAsPayload();

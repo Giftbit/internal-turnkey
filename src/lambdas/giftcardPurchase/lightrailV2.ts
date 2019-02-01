@@ -20,7 +20,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
     const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
     metrics.histogram("turnkey.v2.giftcardpurchase", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
     metrics.flush();
-    auth.requireIds("giftbitUserId");
+    auth.requireIds("userId");
     auth.requireScopes("lightrailV2:turnkey:purchase");
 
     const authorizeAs = auth.getAuthorizeAsPayload();
@@ -45,7 +45,7 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
         throw new GiftbitRestError(cassava.httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card.", "ChargeFailed");
     }
 
-    let value: {id: string, code: string, currency: string, balance: number};
+    let value: { id: string, code: string, currency: string, balance: number };
     try {
         const valueMetadata = {
             ...GiftcardPurchaseParams.getValueMetadata(params),
@@ -105,7 +105,7 @@ export async function deliverGiftcard(evt: cassava.RouterEvent): Promise<cassava
     const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
     metrics.histogram("turnkey.v2.giftcarddeliver", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
     metrics.flush();
-    auth.requireIds("giftbitUserId");
+    auth.requireIds("userId");
     auth.requireScopes("lightrailV2:turnkey:deliver");
 
     const authorizeAs = auth.getAuthorizeAsPayload();
@@ -153,7 +153,7 @@ export async function deliverGiftcard(evt: cassava.RouterEvent): Promise<cassava
     };
 }
 
-async function createValue(assumeToken: string, authorizeAs: string, valueId: string, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig, metadata?: {[key: string]: any}): Promise<{id: string, code: string, currency: string, balance: number}> {
+async function createValue(assumeToken: string, authorizeAs: string, valueId: string, params: GiftcardPurchaseParams, config: TurnkeyPublicConfig, metadata?: { [key: string]: any }): Promise<{ id: string, code: string, currency: string, balance: number }> {
     const response = await superagent.agent()
         .post(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/values?showCode=true`)
         .set("Authorization", `Bearer ${assumeToken}`)
@@ -171,7 +171,7 @@ async function createValue(assumeToken: string, authorizeAs: string, valueId: st
     return response.body;
 }
 
-async function getProgram(assumeToken: string, authorizeAs: string, config: TurnkeyPublicConfig): Promise<{id: string, metadata?: {[key: string]: any}}> {
+async function getProgram(assumeToken: string, authorizeAs: string, config: TurnkeyPublicConfig): Promise<{ id: string, metadata?: { [key: string]: any } }> {
     const response = await superagent.agent()
         .get(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/programs/${encodeURIComponent(config.programId)}`)
         .set("Authorization", `Bearer ${assumeToken}`)
@@ -179,7 +179,7 @@ async function getProgram(assumeToken: string, authorizeAs: string, config: Turn
     return response.body;
 }
 
-async function getValueWithCodeById(assumeToken: string, authorizeAs: string, valueId: string): Promise<{id: string, code: string, balance: number, currency: string, metadata: {[key: string]: any}}> {
+async function getValueWithCodeById(assumeToken: string, authorizeAs: string, valueId: string): Promise<{ id: string, code: string, balance: number, currency: string, metadata: { [key: string]: any } }> {
     const response = await superagent.agent()
         .get(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/values/${encodeURIComponent(valueId)}?showCode=true`)
         .set("Authorization", `Bearer: ${assumeToken}`)
@@ -191,7 +191,7 @@ async function getValueWithCodeById(assumeToken: string, authorizeAs: string, va
     return response.body;
 }
 
-async function updateValueRecipient(assumeToken: string, authorizeAs: string, value: {id: string, metadata: {[key: string]: any}}, recipientEmail: string): Promise<void> {
+async function updateValueRecipient(assumeToken: string, authorizeAs: string, value: { id: string, metadata: { [key: string]: any } }, recipientEmail: string): Promise<void> {
     const metadata = {
         ...value.metadata,
         "giftbit-note": {
@@ -209,7 +209,7 @@ async function updateValueRecipient(assumeToken: string, authorizeAs: string, va
         });
 }
 
-async function rollbackCreateValue(assumeToken: string, authorizeAs: string, value: {id: string}): Promise<void> {
+async function rollbackCreateValue(assumeToken: string, authorizeAs: string, value: { id: string }): Promise<void> {
     if (value) {
         await superagent.agent()
             .patch(`https://${process.env["LIGHTRAIL_DOMAIN"]}/v2/values/${value.id}`)
@@ -221,7 +221,7 @@ async function rollbackCreateValue(assumeToken: string, authorizeAs: string, val
     }
 }
 
-function getValueLabel(value: {balance: number, currency: string}, program: {metadata?: {[key: string]: any}}): string {
+function getValueLabel(value: { balance: number, currency: string }, program: { metadata?: { [key: string]: any } }): string {
     const balanceString = value.balance + "";
     if (program.metadata && program.metadata.fixedInitialBalancesLabels && program.metadata.fixedInitialBalancesLabels[balanceString]) {
         return program.metadata.fixedInitialBalancesLabels[balanceString];
