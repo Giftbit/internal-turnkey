@@ -14,6 +14,10 @@ export const router = new cassava.Router();
 
 router.route(new cassava.routes.LoggingRoute());
 
+router.route(new giftbitRoutes.MetricsRoute({
+    logFunction: console.log
+}));
+
 router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute({
     authConfigPromise: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AuthenticationConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_JWT"),
     rolesConfigPromise: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<any>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ROLE_DEFINITIONS"),

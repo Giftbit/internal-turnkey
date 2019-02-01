@@ -13,6 +13,10 @@ export const router = new cassava.Router();
 router.route(new cassava.routes.LoggingRoute());
 router.route(new giftbitRoutes.HealthCheckRoute("/v1/turnkey/healthCheck"));
 
+router.route(new giftbitRoutes.MetricsRoute({
+    logFunction: console.log
+}));
+
 router.route("/v1/turnkey/stripe/callback")
     .method("GET")
     .handler(async evt => {
