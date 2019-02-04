@@ -1,6 +1,5 @@
 import * as cassava from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
-import * as metrics from "giftbit-lambda-metricslib";
 import * as lightrailV1 from "./lightrailV1";
 import * as lightrailV2 from "./lightrailV2";
 
@@ -44,10 +43,7 @@ router.route("/v2/turnkey/giftcard/deliver")
     .handler(lightrailV2.deliverGiftcard);
 
 //noinspection JSUnusedGlobalSymbols
-export const handler = metrics.wrapLambdaHandler({
-    secureConfig: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_DATADOG"),
-    handler: giftbitRoutes.sentry.wrapLambdaHandler({
-        router,
-        secureConfig: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_SENTRY")
-    })
+export const handler = giftbitRoutes.sentry.wrapLambdaHandler({
+    router,
+    secureConfig: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_SENTRY")
 });

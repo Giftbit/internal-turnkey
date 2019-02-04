@@ -1,7 +1,6 @@
 import * as cassava from "cassava";
 import {httpStatusCode} from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
-import * as metrics from "giftbit-lambda-metricslib";
 import {getLightrailSourceEmailAddress, sendEmail} from "../../utils/emailUtils";
 import {getParamsFromRequest} from "./EmailParameters";
 import {EmailTemplate} from "./EmailTemplate";
@@ -38,8 +37,6 @@ router.route("/v1/turnkey/email")
     .method("POST")
     .handler(async evt => {
         const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
-        metrics.histogram("turnkey.v1.email", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
-        metrics.flush();
         auth.requireIds("userId");
 
         const params = getParamsFromRequest(evt, EMAIL_TEMPLATES);
@@ -71,12 +68,9 @@ router.route("/v1/turnkey/email")
     });
 
 //noinspection JSUnusedGlobalSymbols
-export const handler = metrics.wrapLambdaHandler({
-    secureConfig: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_DATADOG"),
-    handler: giftbitRoutes.sentry.wrapLambdaHandler({
-        router,
-        secureConfig: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_SENTRY")
-    })
+export const handler = giftbitRoutes.sentry.wrapLambdaHandler({
+    router,
+    secureConfig: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_SENTRY")
 });
 
 function replaceEmailPlaceholders(emailContent: string, replacements: { [key: string]: string }): string {

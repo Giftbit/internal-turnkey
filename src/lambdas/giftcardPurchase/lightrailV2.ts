@@ -1,6 +1,5 @@
 import * as cassava from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
-import * as metrics from "giftbit-lambda-metricslib";
 import * as superagent from "superagent";
 import {validateConfig} from "./validateConfig";
 import {GiftcardPurchaseParams} from "./GiftcardPurchaseParams";
@@ -18,8 +17,6 @@ import {formatCurrency} from "../../utils/currencyUtils";
 export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassava.RouterResponse> {
     console.log("Received request:" + JSON.stringify(evt));
     const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
-    metrics.histogram("turnkey.v2.giftcardpurchase", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
-    metrics.flush();
     auth.requireIds("userId");
     auth.requireScopes("lightrailV2:turnkey:purchase");
 
@@ -103,8 +100,6 @@ export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassav
 export async function deliverGiftcard(evt: cassava.RouterEvent): Promise<cassava.RouterResponse> {
     console.log("Received request for deliver gift card:" + JSON.stringify(evt));
     const auth: giftbitRoutes.jwtauth.AuthorizationBadge = evt.meta["auth"];
-    metrics.histogram("turnkey.v2.giftcarddeliver", 1, [`mode:${auth.isTestUser() ? "test" : "live"}`]);
-    metrics.flush();
     auth.requireIds("userId");
     auth.requireScopes("lightrailV2:turnkey:deliver");
 
