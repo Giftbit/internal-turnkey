@@ -9,19 +9,14 @@ import {StripeModeConfig} from "../../utils/stripedtos/StripeConfig";
 import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
 
 export async function validateConfig(auth: giftbitRoutes.jwtauth.AuthorizationBadge, assumeToken: string, authorizeAs: string): Promise<{ turnkeyConfig: TurnkeyPublicConfig, merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeModeConfig }> {
-    try {
-        const turnkeyConfig: TurnkeyPublicConfig = await turnkeyConfigUtil.getConfig(assumeToken, authorizeAs);
-        console.log(`Fetched public turnkey config: ${JSON.stringify(turnkeyConfig)}`);
-        validateTurnkeyConfig(turnkeyConfig);
+    const turnkeyConfig: TurnkeyPublicConfig = await turnkeyConfigUtil.getConfig(assumeToken, authorizeAs);
+    console.log(`Fetched public turnkey config: ${JSON.stringify(turnkeyConfig)}`);
+    validateTurnkeyConfig(turnkeyConfig);
 
-        const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
-        const lightrailStripeConfig = await stripeAccess.getStripeConfig(auth.isTestUser());
-        validateStripeConfig(merchantStripeConfig, lightrailStripeConfig);
-        return {turnkeyConfig, merchantStripeConfig, lightrailStripeConfig};
-    } catch (err) {
-        giftbitRoutes.sentry.sendErrorNotification(err);
-        throw err;
-    }
+    const merchantStripeConfig: StripeAuth = await kvsAccess.kvsGet(assumeToken, "stripeAuth", authorizeAs);
+    const lightrailStripeConfig = await stripeAccess.getStripeConfig(auth.isTestUser());
+    validateStripeConfig(merchantStripeConfig, lightrailStripeConfig);
+    return {turnkeyConfig, merchantStripeConfig, lightrailStripeConfig};
 }
 
 function validateStripeConfig(merchantStripeConfig: StripeAuth, lightrailStripeConfig: StripeModeConfig): void {
