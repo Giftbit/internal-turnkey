@@ -3,12 +3,19 @@ import * as giftbitRoutes from "giftbit-cassava-routes";
 import * as lightrailV1 from "./lightrailV1";
 import * as lightrailV2 from "./lightrailV2";
 
+// Wrapping console.log: otherwise all log calls are prefixed with the requestId from the first request the lambda receives
+const logFunction = function () {
+    console.log(...arguments);
+};
+
 export const router = new cassava.Router();
 
-router.route(new cassava.routes.LoggingRoute());
+router.route(new cassava.routes.LoggingRoute({
+    logFunction
+}));
 
 router.route(new giftbitRoutes.MetricsRoute({
-    logFunction: console.log
+    logFunction
 }));
 
 router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute({
