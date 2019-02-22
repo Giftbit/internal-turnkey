@@ -4,10 +4,7 @@ import * as lightrailV1 from "./lightrailV1";
 import * as lightrailV2 from "./lightrailV2";
 
 // Wrapping console.log: otherwise all log calls are prefixed with the requestId from the first request the lambda receives
-const logFunction = function () {
-    console.log(...arguments);
-};
-
+const logFunction = (...args) => console.log(...args);
 export const router = new cassava.Router();
 
 router.route(new cassava.routes.LoggingRoute({
