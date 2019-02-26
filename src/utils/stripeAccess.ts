@@ -102,9 +102,9 @@ export async function createStripeCharge(params: StripeCreateChargeParams, light
     } catch (err) {
         switch (err.type) {
             case "StripeCardError":
-                throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "Failed to charge credit card..", "ChargeFailed");
+                throw new GiftbitRestError(httpStatusCode.clientError.CONFLICT, "Failed to charge credit card.", "ChargeFailed");
             case "StripeInvalidRequestError":
-                throw new GiftbitRestError(httpStatusCode.clientError.BAD_REQUEST, "The stripeCardToken was invalid.", "StripeInvalidRequestError");
+                throw new GiftbitRestError(httpStatusCode.clientError.CONFLICT, "The stripeCardToken was invalid.", "StripeInvalidRequestError");
             case "RateLimitError":
                 throw new GiftbitRestError(httpStatusCode.clientError.TOO_MANY_REQUESTS, `Service was rate limited by dependent service.`, "DependentServiceRateLimited");
             default:

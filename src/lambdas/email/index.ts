@@ -11,10 +11,14 @@ const DROPIN_TEMPLATE = require("./templates/dropInDeveloperOnboardEmail.html");
 
 export const router = new cassava.Router();
 
-router.route(new cassava.routes.LoggingRoute());
+// Wrapping console.log: otherwise all log calls are prefixed with the requestId from the first request the lambda receives
+const logFunction = (...args) => console.log(...args);
+router.route(new cassava.routes.LoggingRoute({
+    logFunction
+}));
 
 router.route(new giftbitRoutes.MetricsRoute({
-    logFunction: console.log
+    logFunction
 }));
 
 router.route(new giftbitRoutes.jwtauth.JwtAuthorizationRoute({

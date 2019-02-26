@@ -8,13 +8,17 @@ import {TurnkeyPublicConfig} from "../../utils/TurnkeyConfig";
 import * as customer from "../../utils/stripedtos/Customer";
 import {StripeAuth} from "../../utils/stripedtos/StripeAuth";
 
+// Wrapping console.log: otherwise all log calls are prefixed with the requestId from the first request the lambda receives
+const logFunction = (...args) => console.log(...args);
 export const router = new cassava.Router();
 
-router.route(new cassava.routes.LoggingRoute());
+router.route(new cassava.routes.LoggingRoute({
+    logFunction
+}));
 router.route(new giftbitRoutes.HealthCheckRoute("/v1/turnkey/healthCheck"));
 
 router.route(new giftbitRoutes.MetricsRoute({
-    logFunction: console.log
+    logFunction
 }));
 
 router.route("/v1/turnkey/stripe/callback")

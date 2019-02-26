@@ -11,7 +11,7 @@ import {MinfraudScoreResult} from "./MinfraudScoreResult";
 export async function getScore(minfraudScoreParams: MinfraudScoreParams, minfraudConfigPromise: Promise<MinfraudConfig>): Promise<MinfraudScoreResult> {
     const minfraudConfig = await minfraudConfigPromise;
     if (minfraudConfig.doMinfraudCheck) {
-        console.log(`Preforming minfraud check. Params: ${JSON.stringify(minfraudScoreParams)}`);
+        console.log(`Performing minfraud check. Params: ${JSON.stringify(minfraudScoreParams)}`);
         const auth = Buffer.from(`${minfraudConfig.userId}:${minfraudConfig.licenseKey}`).toString("base64");
         const resp = await superagent.post("https://minfraud.maxmind.com/minfraud/v2.0/score")
             .set("Authorization", `Basic ${auth}`)
