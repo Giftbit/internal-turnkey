@@ -8,7 +8,7 @@ phases:
       # Fetch temporary credentials to the S3 bucket with assume-role and put them in a profile.
       # Use sed to do string manipulation because we're in sh, not bash.
       # $CI_KEY_ACCESS_ROLE and $CI_KEY_BUCKET are defined in ci.yaml
-      - ASSUME_RESULT=`aws sts assume-role --role-arn "$CI_KEY_ACCESS_ROLE" --role-session-name s3-access --query '[Credentials.AccessKeyId,Credentials.SecretAccessKey,Credentials.SessionToken]' --output text` && echo "[profile s3-access]\naws_access_key_id=`echo $ASSUME_RESULT | sed -e 's/ .*//'`\naws_secret_access_key=`echo $ASSUME_RESULT | sed -e 's/^[^ ]* //g' | sed -e 's/ .*//'`\naws_session_token=`echo $ASSUME_RESULT | sed -e 's/^[^ ]* [^ ]* //g'`\n" >> ~/.aws/config
+      - ASSUME_RESULT=`aws sts assume-role --role-arn "$CI_KEY_ACCESS_ROLE" --role-session-name s3-access --query '[Credentials.AccessKeyId,Credentials.SecretAccessKey,Credentials.SessionToken]' --output text` && printf "[profile s3-access]\naws_access_key_id=`echo $ASSUME_RESULT | sed -e 's/ .*//'`\naws_secret_access_key=`echo $ASSUME_RESULT | sed -e 's/^[^ ]* //g' | sed -e 's/ .*//'`\naws_session_token=`echo $ASSUME_RESULT | sed -e 's/^[^ ]* [^ ]* //g'`\n" >> ~/.aws/config
       - aws configure set s3.signature_version s3v4 --profile s3-access
       - aws s3 sync s3://$CI_KEY_BUCKET/.ssh ~/.ssh --profile s3-access
       - chmod 600 ~/.ssh/*
