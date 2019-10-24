@@ -21,8 +21,8 @@ export const dynamodb = new aws.DynamoDB({
 
 export const tableSchema: dynameh.TableSchema = {
     tableName: process.env["STRIPE_CONNECT_STATE_TABLE"] || "Table",
-    primaryKeyField: "uuid",
-    primaryKeyType: "string",
+    partitionKeyField: "uuid",
+    partitionKeyType: "string",
     ttlField: "ttl"
 };
 
