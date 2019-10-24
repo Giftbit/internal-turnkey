@@ -432,9 +432,9 @@ Resources:
       Handler: index.handler
       Role: !GetAtt GitHubActionServiceRole.Arn
       Code:
-        S3Bucket: giftbit-public-resources
-        S3Key: cloudformation/codepipeline-github-action/2017-03-27.zip
-      Runtime: nodejs6.10
+        S3Bucket: lightrail-public-resources
+        S3Key: cloudformation/codepipeline-github-action/2019-10-23.zip
+      Runtime: nodejs10.x
       Timeout: 120
       Environment:
         Variables:

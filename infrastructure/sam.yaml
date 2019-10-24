@@ -95,7 +95,7 @@ Resources:
     Properties:
       CodeUri: ../dist/giftcardPurchase/giftcardPurchase.zip
       Handler: index.handler
-      Runtime: nodejs8.10
+      Runtime: nodejs10.x
       MemorySize: 128
       Timeout: 30 # seconds, 300 max
       Environment:
