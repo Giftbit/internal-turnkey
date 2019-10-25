@@ -63,7 +63,7 @@ export namespace GiftcardPurchaseParams {
         }
     }
 
-    export function getStripeMetadata(params: GiftcardPurchaseParams): object {
+    export function getStripeMetadata(params: GiftcardPurchaseParams): {[key: string]: string | number} {
         return {
             sender_name: params.senderName,
             sender_email: params.senderEmail,
