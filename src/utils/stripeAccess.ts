@@ -108,6 +108,7 @@ export async function createStripeCharge(params: StripeCreateChargeParams, light
             case "RateLimitError":
                 throw new GiftbitRestError(httpStatusCode.clientError.TOO_MANY_REQUESTS, `Service was rate limited by dependent service.`, "DependentServiceRateLimited");
             default:
+                console.error("An unexpected error occurred while attempting to charge card", err.type, err);
                 throw new Error(`An unexpected error occurred while attempting to charge card. error ${err}`);
         }
     }
