@@ -60,6 +60,10 @@ module.exports = function (env) {
             resolve: {
                 extensions: ['.ts', '.tsx', '.js']
             },
+            optimization: {
+                minimize: false,
+                namedModules: true
+            },
             plugins: [
                 new webpack.DefinePlugin({"global.GENTLY": false}), // see https://github.com/felixge/node-formidable/issues/337 for why
                 new ZipPlugin({
