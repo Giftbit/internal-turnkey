@@ -1,6 +1,5 @@
 import * as cassava from "cassava";
 import * as giftbitRoutes from "giftbit-cassava-routes";
-import * as lambdaComsLib from "giftbit-lambda-comslib";
 import {getMinfraudParamsForGiftcardPurchase} from "../../utils/giftcardPurchaseFraudCheckUtils";
 import {MinfraudScoreResult} from "../../utils/minfraud/MinfraudScoreResult";
 import {Charge} from "../../utils/stripedtos/Charge";
@@ -40,12 +39,6 @@ export async function passesFraudCheck(giftcardPurchaseParams: GiftcardPurchaseP
         minfraudScore: minfraudScore,
         passedFraudCheck: passedFraudCheck
     };
-    try {
-        console.log(`Sending event on kinesis stream: id: ${charge.id}, payload: ${JSON.stringify(messagePayload)}.`);
-        await lambdaComsLib.putMessage("event.dropingiftcard.purchase.fraudcheck", charge.id, messagePayload, lambdaComsLib.kinesisStreamArnToName(process.env["KINESIS_STREAM_ARN"]));
-    } catch (err) {
-        console.log(`Exception ${err} occurred while attempting to put ${JSON.stringify(messagePayload)} on kinesis stream. Kinesis Stream Arn = ${process.env["KINESIS_STREAM_ARN"]}.`);
-    }
     return passedFraudCheck;
 }
 
