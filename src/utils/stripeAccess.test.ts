@@ -12,7 +12,7 @@ describe("stripeAccess", () => {
     });
 
     describe("createStripeCharge()", () => {
-        it("throws a GiftbitRestError oon fraudulent cards", async () => {
+        it("throws a GiftbitRestError on fraudulent cards", async () => {
             let err: GiftbitRestError = null;
             try {
                 await createStripeCharge(
@@ -28,6 +28,27 @@ describe("stripeAccess", () => {
                 err = error;
             }
             chai.assert.instanceOf(err, GiftbitRestError);
+            chai.assert.equal(err.statusCode, 409);
+            chai.assert.equal(err.additionalParams.messageCode, "ChargeFailed");
+        });
+
+        it("throws a GiftbitRestError on incorrect cvc", async () => {
+            let err: GiftbitRestError = null;
+            try {
+                await createStripeCharge(
+                    {
+                        amount: 5000,
+                        currency: "cad",
+                        source: "tok_chargeDeclinedIncorrectCvc"
+                    },
+                    "sk_test_abcdefg",
+                    merchantAccount.id
+                );
+            } catch (error) {
+                err = error;
+            }
+            chai.assert.instanceOf(err, GiftbitRestError);
+            chai.assert.equal(err.statusCode, 409);
             chai.assert.equal(err.additionalParams.messageCode, "ChargeFailed");
         });
     });
