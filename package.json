@@ -38,7 +38,7 @@
     "giftbit-cassava-routes": "git+ssh://git@github.com/Giftbit/giftbit-cassava-routes.git#semver:^10.1.1",
     "json-loader": "^0.5.7",
     "lightrail-client": "^1.7.0",
-    "mocha": "^8.0.1",
+    "mocha": "^8.1.1",
     "raven": "^2.6.4",
     "rimraf": "^3.0.2",
     "stripe": "^7.10.0",
