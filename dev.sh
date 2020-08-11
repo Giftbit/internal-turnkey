@@ -14,7 +14,6 @@ BUILD_ARTIFACT_BUCKET="dev-lightrailturnkey-mnw-deploymentartifactbucket-eq5kkbd
 PARAMETER_OVERRIDES="--parameter-overrides"
 PARAMETER_OVERRIDES+=" LightrailDomain=api.lightraildev.net"
 PARAMETER_OVERRIDES+=" EmailDomainName=lightraildev.net"
-PARAMETER_OVERRIDES+=" KinesisStreamArn=arn:aws:kinesis:us-west-2:757264843183:stream/dev-LightrailEventStream-101P8E9G8K57O-KinesisStream-WTMKYLCUL5Q7"
 PARAMETER_OVERRIDES+=" LightrailWebappDomain=www.lightraildev.net"
 PARAMETER_OVERRIDES+=" PathToMerchantSharedSecret=/v1/storage/jwtSecret"
 PARAMETER_OVERRIDES+=" SecureConfigBucket=dev-lightrailsecureconfig-1q7bltwyiihpq-bucket-id162gq711cc"

@@ -13,10 +13,6 @@ Parameters:
     Type: String
     Description: The lightrail email domain.
     Default: ""
-  KinesisStreamArn:
-    Type: String
-    Description: The AWS ARN of the Kinesis stream for Lightrail events.
-    AllowedPattern: arn:aws:kinesis:[a-zA-Z_0-9\-]+:\d{12}:stream/[a-zA-Z_0-9+=,.@\-_/]+
   LightrailWebappDomain:
     Type: String
     Description: The domain of the Lightrail web app
@@ -102,7 +98,6 @@ Resources:
         Variables:
           LIGHTRAIL_DOMAIN: !Ref LightrailDomain
           PATH_TO_MERCHANT_SHARED_SECRET: !Ref PathToMerchantSharedSecret
-          KINESIS_STREAM_ARN: !Ref KinesisStreamArn
           SECURE_CONFIG_BUCKET: !Ref SecureConfigBucket
           SECURE_CONFIG_KEY_DATADOG: !Ref SecureConfigKeyDataDog
           SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
@@ -146,12 +141,6 @@ Resources:
                 - ses:SendEmail
                 - ses:SendRawEmail
               Resource: "*"
-            - Effect: Allow
-              Action:
-                - kinesis:PutRecord
-                - kinesis:PutRecords
-              Resource:
-                - !Ref KinesisStreamArn
       Tags:
         ShortName: GiftcardPurchaseFunction
         Service: Turnkey
@@ -177,14 +166,13 @@ Resources:
     Properties:
       CodeUri: ../dist/email/email.zip
       Handler: index.handler
-      Runtime: nodejs8.10
+      Runtime: nodejs10.x
       MemorySize: 128
       Timeout: 30 # seconds, 300 max
       Environment:
         Variables:
           LIGHTRAIL_DOMAIN: !Ref LightrailDomain
           PATH_TO_MERCHANT_SHARED_SECRET: !Ref PathToMerchantSharedSecret
-          KINESIS_STREAM_ARN: !Ref KinesisStreamArn
           SECURE_CONFIG_BUCKET: !Ref SecureConfigBucket
           SECURE_CONFIG_KEY_DATADOG: !Ref SecureConfigKeyDataDog
           SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
@@ -220,12 +208,6 @@ Resources:
                 - ses:SendEmail
                 - ses:SendRawEmail
               Resource: "*"
-            - Effect: Allow
-              Action:
-                - kinesis:PutRecord
-                - kinesis:PutRecords
-              Resource:
-                - !Ref KinesisStreamArn
       Tags:
         ShortName: EmailFunction
         Service: Turnkey
@@ -241,7 +223,7 @@ Resources:
     Properties:
       CodeUri: ../dist/stripe/stripe.zip
       Handler: index.handler
-      Runtime: nodejs8.10
+      Runtime: nodejs10.x
       MemorySize: 128
       Timeout: 30 # seconds, 300 max
       Environment:

@@ -11,8 +11,10 @@ import {TurnkeyPublicConfig, validateTurnkeyConfig} from "../../utils/TurnkeyCon
 import {emailGiftToRecipient} from "./emailGiftToRecipient";
 import {DeliverGiftCardV2Params} from "./DeliverGiftCardParams";
 import * as turnkeyConfigUtil from "../../utils/turnkeyConfigStore";
-import {assumeGiftcardDeliverToken, assumeGiftcardPurchaseToken} from "./lightrailV1";
 import {formatCurrency} from "../../utils/currencyUtils";
+
+export const assumeGiftcardPurchaseToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN");
+export const assumeGiftcardDeliverToken = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<giftbitRoutes.secureConfig.AssumeScopeToken>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_ASSUME_GIFTCARD_DELIVER_TOKEN");
 
 export async function purchaseGiftcard(evt: cassava.RouterEvent): Promise<cassava.RouterResponse> {
     console.log("Received request:" + JSON.stringify(evt));
