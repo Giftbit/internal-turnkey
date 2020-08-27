@@ -22,12 +22,12 @@ PARAMETER_OVERRIDES+=" SecureConfigKeyAssumeStorageScopeToken=assumeStorageScope
 PARAMETER_OVERRIDES+=" SecureConfigKeyAssumeGiftcardDeliverToken=assumeGiftcardDeliverToken.json"
 PARAMETER_OVERRIDES+=" SecureConfigKeyAssumeRetrieveStripeAuth=assumeRetrieveStripeAuth.json"
 PARAMETER_OVERRIDES+=" SecureConfigKeyDataDog=datadog.json"
-PARAMETER_OVERRIDES+=" SecureConfigKeySentry=sentry_lambda_services.json"
 PARAMETER_OVERRIDES+=" SecureConfigKeyJwt=authentication_badge_key.json"
 PARAMETER_OVERRIDES+=" SecureConfigKeyRoleDefinitions=RoleDefinitions.json"
 PARAMETER_OVERRIDES+=" SecureConfigKeyStripe=stripe_connect.json"
 PARAMETER_OVERRIDES+=" SecureConfigKeyMinfraud=minfraud.json"
 PARAMETER_OVERRIDES+=" SecureConfigKmsArn=arn:aws:kms:us-west-2:757264843183:key/5240d853-a89f-4510-82ba-386bf2b977dc"
+PARAMETER_OVERRIDES+=" SentryDsn=https://fb28f9ac76a84e879f7523cc07092369@o51938.ingest.sentry.io/239845"
 
 USAGE="usage: $0 <command name>\nvalid command names: build delete deploy invoke upload"
 

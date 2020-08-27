@@ -33,7 +33,7 @@ router.route("/v1/turnkey/stripe/callback")
         }
 
         if (evt.queryStringParameters["error"]) {
-            console.log(`Stripe Connect error error='${evt.queryStringParameters["error"]}' error_description='${evt.queryStringParameters["error_description"]}' state='${evt.queryStringParameters["state"]}' gui='${state && state.jwtPayload && state.jwtPayload.g && state.jwtPayload.g.gui}'`);
+            console.log(`Stripe Connect error error='${evt.queryStringParameters["error"]}' error_description='${evt.queryStringParameters["error_description"]}' state='${evt.queryStringParameters["state"]}' gui='${state?.jwtPayload?.g?.gui}'`);
         } else {
             evt.requireQueryStringParameter("code");
             evt.requireQueryStringParameter("scope", ["read_write"]);
@@ -217,5 +217,5 @@ router.route("/v1/turnkey/stripe/customer")
 //noinspection JSUnusedGlobalSymbols
 export const handler = giftbitRoutes.sentry.wrapLambdaHandler({
     router,
-    secureConfig: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_SENTRY")
+    sentryDsn: process.env["SENTRY_DSN"]
 });
