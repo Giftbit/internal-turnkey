@@ -74,7 +74,7 @@ router.route("/v1/turnkey/email")
 //noinspection JSUnusedGlobalSymbols
 export const handler = giftbitRoutes.sentry.wrapLambdaHandler({
     router,
-    secureConfig: giftbitRoutes.secureConfig.fetchFromS3ByEnvVar("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_SENTRY")
+    sentryDsn: process.env["SENTRY_DSN"]
 });
 
 function replaceEmailPlaceholders(emailContent: string, replacements: { [key: string]: string }): string {

@@ -41,10 +41,6 @@ Parameters:
     Type: String
     Description: Key of the DataDog API key secure config object in S3
     Default: "datadog.json"
-  SecureConfigKeySentry:
-    Type: String
-    Description: Key of the Sentry API key secure config object in S3
-    Default: "sentry_lambda_services.json"
   SecureConfigKeyJwt:
     Type: String
     Description: Key of the JWT secure config object in S3
@@ -63,6 +59,10 @@ Parameters:
     Type: String
     Description: Optional ARN of the KMS encrypting the S3 bucket
     AllowedPattern: arn:aws:kms:[a-zA-Z_0-9\-]+:\d{12}:key/[a-zA-Z_0-9+=,.@\-_/]+
+  SentryDsn:
+    Type: String
+    Description: You can find your project’s DSN in the “Client Keys” section of your “Project Settings” in Sentry.
+    AllowedPattern: https://[0-9a-f]+@o[0-9a-f]+.ingest.sentry.io/[0-9]+
 
 Resources:
   StripeConnectStateTable:
@@ -105,9 +105,9 @@ Resources:
           SECURE_CONFIG_KEY_ASSUME_GIFTCARD_PURCHASE_TOKEN: !Ref SecureConfigKeyAssumeGiftcardPurchaseToken
           SECURE_CONFIG_KEY_ASSUME_GIFTCARD_DELIVER_TOKEN: !Ref SecureConfigKeyAssumeGiftcardDeliverToken
           SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN: !Ref SecureConfigKeyAssumeStorageScopeToken
-          SECURE_CONFIG_KEY_SENTRY: !Ref SecureConfigKeySentry
           SECURE_CONFIG_KEY_STRIPE: !Ref SecureConfigKeyStripe
           SECURE_CONFIG_KEY_MINFRAUD: !Ref SecureConfigKeyMinfraud
+          SENTRY_DSN: !Ref SentryDsn
           LIGHTRAIL_EMAIL_DOMAIN_NAME: !Ref EmailDomainName
       Policies:
         - Version: 2012-10-17
@@ -120,7 +120,6 @@ Resources:
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeGiftcardDeliverToken}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeStorageScopeToken}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyDataDog}"
-                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeySentry}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyJwt}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyRoleDefinitions}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyStripe}"
@@ -178,7 +177,7 @@ Resources:
           SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
           SECURE_CONFIG_KEY_ROLE_DEFINITIONS: !Ref SecureConfigKeyRoleDefinitions
           SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN: !Ref SecureConfigKeyAssumeStorageScopeToken
-          SECURE_CONFIG_KEY_SENTRY: !Ref SecureConfigKeySentry
+          SENTRY_DSN: !Ref SentryDsn
           LIGHTRAIL_EMAIL_DOMAIN_NAME: !Ref EmailDomainName
       Policies:
         - Version: 2012-10-17
@@ -189,7 +188,6 @@ Resources:
               Resource:
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeStorageScopeToken}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyDataDog}"
-                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeySentry}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyJwt}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyRoleDefinitions}"
             - Effect: Allow
@@ -236,8 +234,8 @@ Resources:
           SECURE_CONFIG_KEY_ASSUME_STORAGE_SCOPE_TOKEN: !Ref SecureConfigKeyAssumeStorageScopeToken
           SECURE_CONFIG_KEY_JWT: !Ref SecureConfigKeyJwt
           SECURE_CONFIG_KEY_ROLE_DEFINITIONS: !Ref SecureConfigKeyRoleDefinitions
-          SECURE_CONFIG_KEY_SENTRY: !Ref SecureConfigKeySentry
           SECURE_CONFIG_KEY_STRIPE: !Ref SecureConfigKeyStripe
+          SENTRY_DSN: !Ref SentryDsn
           STRIPE_CONNECT_STATE_TABLE: !Ref StripeConnectStateTable
       Policies:
         - Version: 2012-10-17
@@ -257,7 +255,6 @@ Resources:
               Resource:
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeRetrieveStripeAuth}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyAssumeStorageScopeToken}"
-                - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeySentry}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyJwt}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyRoleDefinitions}"
                 - !Sub "arn:aws:s3:::${SecureConfigBucket}/${SecureConfigKeyStripe}"
