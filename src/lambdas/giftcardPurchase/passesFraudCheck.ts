@@ -10,6 +10,9 @@ import {MinfraudConfig} from "../../utils/minfraud/MinfraudConfig";
 
 const minfraudConfigPromise = giftbitRoutes.secureConfig.fetchFromS3ByEnvVar<MinfraudConfig>("SECURE_CONFIG_BUCKET", "SECURE_CONFIG_KEY_MINFRAUD");
 
+// We've stopped paying for this service.
+const skipMinfraud = true;
+
 export async function passesFraudCheck(giftcardPurchaseParams: GiftcardPurchaseParams, charge: Charge, request: cassava.RouterEvent): Promise<boolean> {
     const auth: giftbitRoutes.jwtauth.AuthorizationBadge = request.meta["auth"];
     const passedStripeCheck = passesStripeCheck(charge);
@@ -23,14 +26,14 @@ export async function passesFraudCheck(giftcardPurchaseParams: GiftcardPurchaseP
     });
     let minfraudScore: MinfraudScoreResult;
 
-    if (!auth.isTestUser()) {
+    if (!skipMinfraud && !auth.isTestUser()) {
         try {
             minfraudScore = await getScore(minfraudScoreParams, minfraudConfigPromise);
         } catch (err) {
             console.log(`Unexpected error occurred during fraud check. Simply logging the exception and carrying on with request. ${err}`);
         }
     }
-    let passedMinfraudCheck = passesMinfraudCheck(minfraudScore);
+    const passedMinfraudCheck = passesMinfraudCheck(minfraudScore);
 
     const passedFraudCheck = passedStripeCheck && passedMinfraudCheck;
     const messagePayload = {
