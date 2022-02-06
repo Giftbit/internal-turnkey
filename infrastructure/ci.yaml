@@ -99,6 +99,13 @@ Resources:
               - !Sub "arn:aws:s3:::${DeploymentArtifactBucket}/*"
           - Effect: Allow
             Action:
+              - ecr:BatchCheckLayerAvailability
+              - ecr:BatchGetImage
+              - ecr:GetAuthorizationToken
+              - ecr:GetDownloadUrlForLayer
+            Resource: "*"
+          - Effect: Allow
+            Action:
               - sts:AssumeRole
             Resource: !Ref CiKeysAccessRoleArn
   CodeBuildProject:
@@ -109,10 +116,11 @@ Resources:
       Artifacts:
         Type: CODEPIPELINE
       Environment:
-        Type: linuxContainer
+        Type: LINUX_CONTAINER
         # ComputeType options: BUILD_GENERAL1_SMALL, BUILD_GENERAL1_MEDIUM, BUILD_GENERAL1_LARGE
         ComputeType: BUILD_GENERAL1_SMALL
         Image: !Ref CodeBuildImageNodeSSH
+        ImagePullCredentialsType: SERVICE_ROLE
         EnvironmentVariables:
           - Name: BUILD_ARTIFACT_BUCKET
             Value: !Ref DeploymentArtifactBucket
