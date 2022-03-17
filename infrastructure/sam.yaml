@@ -62,7 +62,7 @@ Parameters:
   SentryDsn:
     Type: String
     Description: You can find your project’s DSN in the “Client Keys” section of your “Project Settings” in Sentry.
-    AllowedPattern: https://[0-9a-f]+@o[0-9a-f]+.ingest.sentry.io/[0-9]+
+    AllowedPattern: (https://[0-9a-f]+@o[0-9a-f]+.ingest.sentry.io/[0-9]+)?
 
 Resources:
   StripeConnectStateTable:
