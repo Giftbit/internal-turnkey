@@ -26,7 +26,7 @@ Parameters:
   GitHubBranch:
     Type: String
     Description: Git branch to build off of.
-    Default: master
+    Default: main
   GitHubBranchDest:
     Type: String
     Description: Git branch to pull request into after a successful deploy.  Leave empty for no action.

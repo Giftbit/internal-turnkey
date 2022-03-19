@@ -1,5 +1,5 @@
 # internal-turnkey
-Supports turnkey widgets
+Supports turnkey widgets and implements Stripe oauth flow.  Stripe credentials themselves are stored in KVS.
 
 ## Testing
 
